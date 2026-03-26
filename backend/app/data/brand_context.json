@@ -1,0 +1,77 @@
+{
+  "brand": {
+    "name": "FieldPie",
+    "tagline": "The field operations management platform",
+    "description": "FieldPie is a B2B SaaS platform that enables businesses with field operations to manage their inspection, sales, merchandising, team management, and field control processes from a single platform.",
+    "tone": "Professional, technical, authoritative. Speaks as an industry expert. Clear, concise, and solution-oriented. No fluff, no hype.",
+    "target_audience": [
+      "Merchandising companies",
+      "Restaurant and franchise chains",
+      "Occupational health and safety companies",
+      "Hotel chains",
+      "Any business with field teams"
+    ],
+    "key_features": [
+      "Field inspection and auditing",
+      "Sales team tracking",
+      "Merchandising management",
+      "Team and task management",
+      "Real-time reporting and analytics",
+      "Mobile application"
+    ],
+    "pain_points_solved": [
+      "Inefficient tracking of field teams",
+      "Paper-based inspection and audit forms",
+      "Lack of real-time visibility into field operations",
+      "Poor coordination between office and field teams",
+      "Manual and time-consuming reporting processes"
+    ],
+    "competitors": {
+      "global": ["GetJobber", "ServiceTitan", "HouseCallPro"],
+      "local": ["Repsly", "VisitBasis", "Vispera"]
+    },
+    "differentiators": [
+      "Built for the unique dynamics of field-heavy industries",
+      "Single platform covering all field operation verticals",
+      "Fast onboarding and ease of use"
+    ]
+  },
+  "visual_identity": {
+    "primary_colors": {
+      "PM500": "#003E3E",
+      "PM300": "#019E87",
+      "PM100": "#A0DDC7"
+    },
+    "secondary_colors": {
+      "SC500": "#42474C",
+      "SC300": "#4A5A65",
+      "SC100": "#96A3C2"
+    },
+    "accent_colors": {
+      "red": "#F51E2E",
+      "yellow": "#F3B800",
+      "green": "#17B010"
+    },
+    "logo_files": {
+      "color": "assets/fieldpie-logo 1.png",
+      "dark": "assets/fieldpie-logo 2.png",
+      "white": "assets/fieldpie-logo 3.png"
+    },
+    "logo_description": "A stylized pie chart combined with a location pin icon. The word 'Field' is written in dark gray, 'Pie' in teal/green.",
+    "visual_style": "Modern, clean, corporate. Primary color combination of teal and dark gray. Minimalist backgrounds, strong typography, data-driven visuals."
+  },
+  "social_media": {
+    "platforms": ["LinkedIn", "Instagram"],
+    "linkedin_focus": "B2B decision makers, operations managers, and company executives with field teams",
+    "instagram_focus": "Brand awareness, product visualization, and industry insights",
+    "content_pillars": [
+      "Product features and benefits",
+      "Industry insights and trends",
+      "Customer success stories",
+      "Operational efficiency tips",
+      "Company culture and team"
+    ],
+    "posting_frequency": "3-4 posts per week",
+    "language": "English"
+  }
+}

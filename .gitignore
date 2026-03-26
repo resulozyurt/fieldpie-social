@@ -1,0 +1,26 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.env
+
+# Node
+frontend/node_modules/
+frontend/.vite/
+
+# Generated assets — don't commit these
+assets/generated/
+assets/references/
+assets/elements/
+
+# Keep fonts if added
+# assets/fonts/ — commit this if you want fonts in repo
+
+# Data — commit calendars and brand context
+# backend/app/data/ — commit this
+
+# IDE
+.vscode/
+.idea/
+*.DS_Store
