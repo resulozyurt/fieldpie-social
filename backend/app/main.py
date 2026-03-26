@@ -51,8 +51,6 @@ app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
 
 # Serve React frontend build in production
 FRONTEND_BUILD = BASE_DIR / "frontend" / "dist"
-if FRONTEND_BUILD.exists():
-    app.mount("/static", StaticFiles(directory=str(FRONTEND_BUILD / "assets")), name="frontend-assets")
 
 
 # ---------- helpers ----------
@@ -417,3 +415,8 @@ async def serve_frontend(full_path: str):
     if file_path.exists() and file_path.is_file():
         return FileResponse(str(file_path))
     return FileResponse(str(build_dir / "index.html"))
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run("backend.app.main:app", host="0.0.0.0", port=port)
