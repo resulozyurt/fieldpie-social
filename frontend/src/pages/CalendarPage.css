@@ -110,3 +110,30 @@
 .btn-reject { background: #FFEBEE; color: #C62828; }
 .btn-reject:hover { background: #FFCDD2; }
 .btn-approve:disabled, .btn-reject:disabled { opacity: 0.5; }
+/* Progress Bar */
+.progress-overlay { background: var(--white); border: 2px dashed var(--pm300); border-radius: var(--radius); padding: 32px; text-align: center; margin: 20px 0; }
+.progress-bar-container { background: var(--gray-200); border-radius: 10px; height: 12px; width: 100%; max-width: 500px; margin: 16px auto; overflow: hidden; }
+.progress-bar-fill { background: var(--pm300); height: 100%; transition: width 0.4s ease; }
+.btn-generate-main { background: var(--pm500); color: white; padding: 12px 24px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 15px; }
+.btn-generate-main:hover { background: var(--pm300); }
+
+/* Calendar Grid */
+.calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; margin-top: 10px; }
+.cal-header-day { text-align: center; font-weight: 600; color: var(--pm500); padding: 10px 0; background: var(--white); border-radius: var(--radius); border: 1px solid var(--gray-200); font-size: 13px; }
+.cal-day { background: var(--white); border: 1px solid var(--gray-200); border-radius: var(--radius); min-height: 130px; padding: 8px; display: flex; flex-direction: column; gap: 6px; transition: background 0.2s; }
+.cal-day:hover { background: var(--gray-50); }
+.cal-day.blank { background: transparent; border: none; min-height: auto; }
+.day-number { font-size: 13px; font-weight: 600; color: var(--gray-600); text-align: right; margin-bottom: 4px; }
+
+/* Calendar Item Card */
+.cal-item-card { background: var(--gray-50); border: 1px solid var(--gray-200); border-left: 3px solid var(--gray-400); border-radius: 6px; padding: 8px; font-size: 11px; cursor: grab; transition: box-shadow 0.2s; }
+.cal-item-card:hover { box-shadow: var(--shadow); }
+.cal-item-card:active { cursor: grabbing; }
+.cal-item-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.cal-item-title { font-weight: 500; color: var(--sc500); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3; }
+
+/* Status Colors for Sidebar */
+.cal-item-card.status-content_generated { border-left-color: #1565C0; }
+.cal-item-card.status-approved { border-left-color: #2E7D32; }
+.cal-item-card.status-image_generated { border-left-color: #6A1B9A; }
+.cal-item-card.status-error { border-left-color: #C62828; }

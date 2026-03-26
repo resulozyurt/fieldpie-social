@@ -283,7 +283,7 @@ def edit_item_field(req: UpdateItemRequest, db: Session = Depends(get_db)):
     if not item:
         raise HTTPException(status_code=404, detail=f"Item {req.item_id} not found")
 
-    editable_top = ["topic", "hook", "notes"]
+    editable_top = ["topic", "hook", "notes", "date"]
     editable_content = ["caption", "text_on_image", "description", "image_prompt"]
 
     if req.field in editable_top:

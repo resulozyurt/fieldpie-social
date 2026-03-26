@@ -149,7 +149,7 @@ export default function ItemPage() {
   if (!item) return <div className="item-page"><div className="state-msg error">Item not found.</div></div>;
 
   const content = item.content || {};
-  const canGenerateImage = item.status === "approved" || item.status === "image_generated";
+  const canGenerateImage = item.status !== "pending";
 
   return (
     <div className="item-page">
@@ -316,7 +316,12 @@ export default function ItemPage() {
 
           {item.image_url ? (
             <div className="image-result">
-              <img src={`${BASE}${item.image_url}`} alt={content.text_on_image} className="generated-image" />
+              <img 
+  src={`${BASE}${item.image_url}?t=${new Date(item.image_generated_at).getTime()}`} 
+  alt={content.text_on_image} 
+  className="generated-image" 
+  onError={(e) => { e.target.src = "https://via.placeholder.com/600x600?text=Görsel+Yükleniyor..."; }}
+/>
               <div className="image-actions">
                 <a href={`${BASE}${item.image_url}`} download className="btn btn-secondary">↓ Download</a>
                 {item.image_style_ref_used && <span className="ref-badge">✓ Style ref used</span>}
