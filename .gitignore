@@ -8,6 +8,7 @@ __pycache__/
 # Node
 frontend/node_modules/
 frontend/.vite/
+# NOT ignoring frontend/dist — it must be committed for Railway deploy
 
 # Generated assets — don't commit these
 assets/generated/
