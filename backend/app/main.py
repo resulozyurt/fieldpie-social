@@ -121,7 +121,11 @@ class GenerateImageRequest(BaseModel):
 # ---------- routes ----------
 
 @app.get("/")
-def root():
+async def root():
+    """Serve React frontend index.html."""
+    index = BASE_DIR / "frontend" / "dist" / "index.html"
+    if index.exists():
+        return FileResponse(str(index))
     return {"status": "ok", "service": "FieldPie Social Media API", "version": "1.0.0"}
 
 
