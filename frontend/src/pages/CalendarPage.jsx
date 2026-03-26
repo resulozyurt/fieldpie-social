@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getCalendar, updateStatus } from "../api";
+import { getCalendar, updateStatus, generateCalendar } from "../api";
 import "./CalendarPage.css";
 
 const STATUS_COLORS = {
@@ -11,7 +11,6 @@ const STATUS_COLORS = {
   published: { bg: "#F3E5F5", text: "#6A1B9A", label: "Published" },
   error: { bg: "#FBE9E7", text: "#BF360C", label: "Error" },
 };
-
 const PLATFORM_ICONS = { LinkedIn: "💼", Instagram: "📷" };
 
 export default function CalendarPage() {
@@ -22,15 +21,23 @@ export default function CalendarPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [updatingId, setUpdatingId] = useState(null);
+  const [generating, setGenerating] = useState(false); // Yeni state
   const navigate = useNavigate();
 
-  useEffect(() => {
+  const fetchCalendar = () => {
     setLoading(true);
     setError(null);
     getCalendar(year, month)
       .then(setCalendar)
-      .catch(() => setError("No calendar found for this month."))
+      .catch(() => {
+          setCalendar(null);
+          setError("No calendar found for this month.");
+      })
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchCalendar();
   }, [year, month]);
 
   const handleStatus = async (e, item, status) => {
@@ -46,6 +53,21 @@ export default function CalendarPage() {
       }));
     } finally {
       setUpdatingId(null);
+    }
+  };
+
+  // Yeni Üretim Fonksiyonu
+  const handleGenerateCalendar = async () => {
+    setGenerating(true);
+    setError(null);
+    try {
+      await generateCalendar(month, year);
+      fetchCalendar(); // Üretim bitince takvimi yeniden çek
+    } catch (err) {
+      const msg = err.response?.data?.detail || err.message;
+      setError("Takvim üretilemedi: " + msg);
+    } finally {
+      setGenerating(false);
     }
   };
 
@@ -66,7 +88,29 @@ export default function CalendarPage() {
       </div>
 
       {loading && <div className="state-msg">Loading calendar...</div>}
-      {error && <div className="state-msg error">{error}</div>}
+
+      {/* Veri Yoksa Gösterilecek Üretim Butonu Alanı */}
+      {!loading && !calendar && (
+        <div className="state-msg" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+            <p style={{ color: 'var(--gray-600)' }}>{error || "Bu ay için henüz bir içerik takvimi oluşturulmamış."}</p>
+            <button 
+                onClick={handleGenerateCalendar} 
+                disabled={generating}
+                style={{
+                    background: 'var(--pm500)',
+                    color: 'white',
+                    padding: '10px 20px',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: generating ? 'not-allowed' : 'pointer',
+                    fontWeight: '600',
+                    opacity: generating ? 0.7 : 1
+                }}
+            >
+                {generating ? "🤖 Yapay Zeka Takvimi Oluşturuyor (30-60 sn)..." : "✦ Bu Ay İçin Takvim Üret"}
+            </button>
+        </div>
+      )}
 
       {calendar && (
         <>
