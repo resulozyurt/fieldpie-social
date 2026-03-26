@@ -1,25 +1,32 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 from pathlib import Path
 from datetime import datetime
-import json
 import sys
 import shutil
 import os
+import traceback
 from dotenv import load_dotenv
+
 load_dotenv()
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from backend.app.config import ANTHROPIC_API_KEY, FAL_KEY
-from backend.app.modules.brand_module import load_brand_context, build_brand_system_prompt
-from backend.app.modules.calendar_module import generate_content_calendar, save_calendar
-from backend.app.modules.content_module import generate_content_for_item, generate_all_content
+from backend.app.modules.brand_module import load_brand_context
+from backend.app.modules.calendar_module import generate_content_calendar
+from backend.app.modules.content_module import generate_content_for_item
+from backend.app.database import engine, get_db, Base
+from backend.app.models import Calendar, ContentItem
 
-app = FastAPI(title="FieldPie Social Media API", version="1.0.0")
+# FastAPI ayağa kalkarken tablolar yoksa veritabanında otomatik oluşturur
+Base.metadata.create_all(bind=engine)
+
+app = FastAPI(title="FieldPie Social Media API", version="1.1.0")
 
 ALLOWED_ORIGINS = [
     "http://localhost:3000",
@@ -38,50 +45,36 @@ app.add_middleware(
 )
 
 BASE_DIR = Path(__file__).parent.parent.parent
-DATA_DIR = BASE_DIR / "backend" / "app" / "data"
 ASSETS_DIR = BASE_DIR / "assets"
 GENERATED_DIR = ASSETS_DIR / "generated"
 REFERENCES_DIR = ASSETS_DIR / "references"
 ELEMENTS_DIR = ASSETS_DIR / "elements"
+
 GENERATED_DIR.mkdir(parents=True, exist_ok=True)
 REFERENCES_DIR.mkdir(parents=True, exist_ok=True)
 ELEMENTS_DIR.mkdir(parents=True, exist_ok=True)
 
 app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
 
-# Serve React frontend build in production
-FRONTEND_BUILD = BASE_DIR / "frontend" / "dist"
-
-
-# ---------- helpers ----------
-
-def get_calendar_path(month: int, year: int) -> Path:
-    dt = datetime(year, month, 1)
-    slug = dt.strftime("%B_%Y").lower()
-    return DATA_DIR / f"calendar_{slug}.json"
-
-
-def load_calendar(month: int, year: int) -> dict:
-    path = get_calendar_path(month, year)
-    if not path.exists():
-        raise HTTPException(status_code=404, detail=f"Calendar for {month}/{year} not found")
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
-
-
-def save_calendar_data(data: dict, month: int, year: int):
-    path = get_calendar_path(month, year)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
-
-
-def get_reference_path(item_id: int) -> Path | None:
-    """Return path of existing reference image for an item, or None."""
-    for ext in [".jpg", ".jpeg", ".png", ".webp"]:
-        p = REFERENCES_DIR / f"item_{item_id}_ref{ext}"
-        if p.exists():
-            return p
-    return None
+# ---------- helper ----------
+def map_item_to_dict(item: ContentItem) -> dict:
+    """SQLAlchemy modelini React Frontend'in beklediği dict formatına çevirir."""
+    return {
+        "id": item.id,
+        "date": item.date,
+        "platform": item.platform,
+        "content_pillar": item.content_pillar,
+        "format": item.format,
+        "topic": item.topic,
+        "hook": item.hook,
+        "notes": item.notes,
+        "status": item.status,
+        "content": item.content_data or {},
+        "image_url": item.image_url,
+        "image_generated_at": item.image_generated_at.isoformat() if item.image_generated_at else None,
+        "image_style_ref_used": item.image_style_ref_used,
+        "image_element_used": item.image_element_used
+    }
 
 
 # ---------- request models ----------
@@ -90,7 +83,6 @@ class GenerateCalendarRequest(BaseModel):
     month: int
     year: int
 
-
 class UpdateItemRequest(BaseModel):
     month: int
     year: int
@@ -98,19 +90,16 @@ class UpdateItemRequest(BaseModel):
     field: str
     value: str
 
-
 class UpdateStatusRequest(BaseModel):
     month: int
     year: int
     item_id: int
     status: str
 
-
 class RegenerateContentRequest(BaseModel):
     month: int
     year: int
     item_id: int
-
 
 class GenerateImageRequest(BaseModel):
     month: int
@@ -126,7 +115,7 @@ async def root():
     index = BASE_DIR / "frontend" / "dist" / "index.html"
     if index.exists():
         return FileResponse(str(index))
-    return {"status": "ok", "service": "FieldPie Social Media API", "version": "1.0.0"}
+    return {"status": "ok", "service": "FieldPie Social Media API", "version": "1.1.0"}
 
 
 @app.get("/api/brand")
@@ -137,100 +126,156 @@ def get_brand():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/calendar/{year}/{month}")
-def get_calendar(year: int, month: int):
-    return load_calendar(month, year)
-
-
 @app.get("/api/calendars")
-def list_calendars():
-    files = sorted(DATA_DIR.glob("calendar_*.json"))
-    calendars = []
-    for f in files:
-        with open(f, "r", encoding="utf-8") as fp:
-            data = json.load(fp)
-        total = len(data.get("items", []))
-        approved = sum(1 for i in data["items"] if i.get("status") == "approved")
-        generated = sum(1 for i in data["items"] if i.get("status") == "content_generated")
-        calendars.append({
-            "month": data.get("month"),
-            "filename": f.name,
+def list_calendars(db: Session = Depends(get_db)):
+    calendars = db.query(Calendar).order_by(Calendar.year.desc(), Calendar.month.desc()).all()
+    result = []
+    
+    for cal in calendars:
+        total = len(cal.items)
+        approved = sum(1 for i in cal.items if i.status == "approved")
+        generated = sum(1 for i in cal.items if i.status == "content_generated")
+        
+        result.append({
+            "month": cal.month_name,
+            "filename": f"db_{cal.month}_{cal.year}", # Frontend uyumluluğu
             "total_items": total,
             "approved": approved,
             "content_generated": generated,
             "pending": total - approved - generated,
         })
-    return {"calendars": calendars}
+    return {"calendars": result}
+
+
+@app.get("/api/calendar/{year}/{month}")
+def get_calendar(year: int, month: int, db: Session = Depends(get_db)):
+    cal = db.query(Calendar).filter(Calendar.year == year, Calendar.month == month).first()
+    if not cal:
+        raise HTTPException(status_code=404, detail=f"Calendar for {month}/{year} not found")
+    
+    return {
+        "month": cal.month_name,
+        "total_items": len(cal.items),
+        "items": [map_item_to_dict(item) for item in cal.items]
+    }
 
 
 @app.post("/api/calendar/generate")
-def generate_calendar(req: GenerateCalendarRequest):
-    path = get_calendar_path(req.month, req.year)
-    if path.exists():
+def generate_calendar(req: GenerateCalendarRequest, db: Session = Depends(get_db)):
+    existing = db.query(Calendar).filter(Calendar.month == req.month, Calendar.year == req.year).first()
+    if existing:
         raise HTTPException(status_code=409, detail=f"Calendar for {req.month}/{req.year} already exists.")
     try:
+        # LLM'den dict olarak ham veri gelir
         calendar_data = generate_content_calendar(month=req.month, year=req.year)
-        save_calendar(calendar_data, output_dir=str(DATA_DIR))
-        return {"success": True, "month": calendar_data["month"], "total_items": calendar_data["total_items"]}
+        
+        new_cal = Calendar(
+            month_name=calendar_data["month"],
+            month=req.month,
+            year=req.year
+        )
+        db.add(new_cal)
+        db.commit()
+        db.refresh(new_cal)
+
+        # Gelen datayı SQL tablolarına basıyoruz
+        for i_data in calendar_data["items"]:
+            new_item = ContentItem(
+                calendar_id=new_cal.id,
+                date=i_data.get("date"),
+                platform=i_data.get("platform"),
+                content_pillar=i_data.get("content_pillar"),
+                format=i_data.get("format"),
+                topic=i_data.get("topic"),
+                hook=i_data.get("hook"),
+                notes=i_data.get("notes"),
+                status="pending"
+            )
+            db.add(new_item)
+        db.commit()
+        
+        return {"success": True, "month": new_cal.month_name, "total_items": len(calendar_data["items"])}
     except Exception as e:
+        db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/content/generate-all")
-def generate_all(req: GenerateCalendarRequest):
-    path = get_calendar_path(req.month, req.year)
-    if not path.exists():
+def generate_all(req: GenerateCalendarRequest, db: Session = Depends(get_db)):
+    cal = db.query(Calendar).filter(Calendar.month == req.month, Calendar.year == req.year).first()
+    if not cal:
         raise HTTPException(status_code=404, detail="Calendar not found")
+
     try:
-        calendar_data = generate_all_content(calendar_path=str(path))
-        success = sum(1 for i in calendar_data["items"] if i.get("status") == "content_generated")
-        return {"success": True, "generated": success, "total": len(calendar_data["items"])}
+        brand_context = load_brand_context()
+        success_count = 0
+        
+        for item in cal.items:
+            if item.status == "content_generated":
+                continue
+                
+            # İçerik üreticiye göndermek için dict'e çevir
+            item_dict = map_item_to_dict(item)
+            try:
+                content = generate_content_for_item(item_dict, brand_context)
+                item.content_data = content
+                item.status = "content_generated"
+                item.content_generated_at = datetime.utcnow()
+                success_count += 1
+            except Exception as e:
+                item.status = "error"
+                print(f"Error generating content for item {item.id}: {e}")
+
+        db.commit()
+        return {"success": True, "generated": success_count, "total": len(cal.items)}
     except Exception as e:
+        db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/content/regenerate")
-def regenerate_item(req: RegenerateContentRequest):
-    import traceback
-    calendar_data = load_calendar(req.month, req.year)
-    item = next((i for i in calendar_data["items"] if i["id"] == req.item_id), None)
+def regenerate_item(req: RegenerateContentRequest, db: Session = Depends(get_db)):
+    item = db.query(ContentItem).filter(ContentItem.id == req.item_id).first()
     if not item:
         raise HTTPException(status_code=404, detail=f"Item {req.item_id} not found")
+        
     try:
         brand_context = load_brand_context()
-        new_content = generate_content_for_item(item, brand_context)
-        # Only update content fields — preserve status, image_url, everything else
-        item["content"] = new_content
-        item["content_regenerated_at"] = datetime.now().isoformat()
-        # Upgrade status only if it was still pending
-        if item.get("status") == "pending":
-            item["status"] = "content_generated"
-        save_calendar_data(calendar_data, req.month, req.year)
-        return {"success": True, "item": item}
+        new_content = generate_content_for_item(map_item_to_dict(item), brand_context)
+        
+        item.content_data = new_content
+        item.content_generated_at = datetime.utcnow()
+        if item.status == "pending" or item.status == "error":
+            item.status = "content_generated"
+            
+        db.commit()
+        db.refresh(item)
+        return {"success": True, "item": map_item_to_dict(item)}
     except Exception as e:
+        db.rollback()
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.patch("/api/item/status")
-def update_status(req: UpdateStatusRequest):
-    valid_statuses = ["pending", "content_generated", "approved", "rejected", "image_generated", "published"]
+def update_status(req: UpdateStatusRequest, db: Session = Depends(get_db)):
+    valid_statuses = ["pending", "content_generated", "approved", "rejected", "image_generated", "published", "error"]
     if req.status not in valid_statuses:
         raise HTTPException(status_code=400, detail=f"Invalid status. Use one of: {valid_statuses}")
-    calendar_data = load_calendar(req.month, req.year)
-    item = next((i for i in calendar_data["items"] if i["id"] == req.item_id), None)
+        
+    item = db.query(ContentItem).filter(ContentItem.id == req.item_id).first()
     if not item:
         raise HTTPException(status_code=404, detail=f"Item {req.item_id} not found")
-    item["status"] = req.status
-    item["status_updated_at"] = datetime.now().isoformat()
-    save_calendar_data(calendar_data, req.month, req.year)
+        
+    item.status = req.status
+    item.status_updated_at = datetime.utcnow()
+    db.commit()
     return {"success": True, "item_id": req.item_id, "status": req.status}
 
 
 @app.patch("/api/item/edit")
-def edit_item_field(req: UpdateItemRequest):
-    calendar_data = load_calendar(req.month, req.year)
-    item = next((i for i in calendar_data["items"] if i["id"] == req.item_id), None)
+def edit_item_field(req: UpdateItemRequest, db: Session = Depends(get_db)):
+    item = db.query(ContentItem).filter(ContentItem.id == req.item_id).first()
     if not item:
         raise HTTPException(status_code=404, detail=f"Item {req.item_id} not found")
 
@@ -238,72 +283,78 @@ def edit_item_field(req: UpdateItemRequest):
     editable_content = ["caption", "text_on_image", "description", "image_prompt"]
 
     if req.field in editable_top:
-        item[req.field] = req.value
+        setattr(item, req.field, req.value)
     elif req.field in editable_content:
-        if "content" not in item:
-            raise HTTPException(status_code=400, detail="Content not yet generated for this item")
-        item["content"][req.field] = req.value
+        # JSONB datasını güncellemek için kopyalayıp yeniden atamak gerekir
+        data = dict(item.content_data or {})
+        data[req.field] = req.value
+        item.content_data = data
     else:
         raise HTTPException(status_code=400, detail=f"Field '{req.field}' is not editable")
 
-    item["manually_edited"] = True
-    item["last_edited_at"] = datetime.now().isoformat()
-    save_calendar_data(calendar_data, req.month, req.year)
+    item.manually_edited = True
+    item.last_edited_at = datetime.utcnow()
+    db.commit()
     return {"success": True, "item_id": req.item_id, "field": req.field}
 
 
 @app.get("/api/item/{year}/{month}/{item_id}")
-def get_item(year: int, month: int, item_id: int):
-    calendar_data = load_calendar(month, year)
-    item = next((i for i in calendar_data["items"] if i["id"] == item_id), None)
+def get_item(year: int, month: int, item_id: int, db: Session = Depends(get_db)):
+    item = db.query(ContentItem).filter(ContentItem.id == item_id).first()
     if not item:
         raise HTTPException(status_code=404, detail=f"Item {item_id} not found")
-    return item
+    return map_item_to_dict(item)
 
 
 @app.get("/api/stats/{year}/{month}")
-def get_stats(year: int, month: int):
-    calendar_data = load_calendar(month, year)
-    items = calendar_data["items"]
+def get_stats(year: int, month: int, db: Session = Depends(get_db)):
+    cal = db.query(Calendar).filter(Calendar.year == year, Calendar.month == month).first()
+    if not cal:
+        return {"month": "Unknown", "total": 0, "by_status": {}, "by_platform": {}}
+        
     statuses = {}
-    for item in items:
-        s = item.get("status", "pending")
-        statuses[s] = statuses.get(s, 0) + 1
     platforms = {}
-    for item in items:
-        p = item.get("platform", "Unknown")
+    for item in cal.items:
+        s = item.status or "pending"
+        statuses[s] = statuses.get(s, 0) + 1
+        p = item.platform or "Unknown"
         platforms[p] = platforms.get(p, 0) + 1
+        
     return {
-        "month": calendar_data["month"],
-        "total": len(items),
+        "month": cal.month_name,
+        "total": len(cal.items),
         "by_status": statuses,
         "by_platform": platforms,
     }
 
 
 @app.post("/api/image/generate")
-def generate_image(req: GenerateImageRequest):
+def generate_image(req: GenerateImageRequest, db: Session = Depends(get_db)):
     from backend.app.modules.image_module import generate_image_for_item
-    calendar_data = load_calendar(req.month, req.year)
-    item = next((i for i in calendar_data["items"] if i["id"] == req.item_id), None)
+    item = db.query(ContentItem).filter(ContentItem.id == req.item_id).first()
+    
     if not item:
         raise HTTPException(status_code=404, detail=f"Item {req.item_id} not found")
-    if not item.get("content", {}).get("image_prompt"):
+    if not item.content_data or not item.content_data.get("image_prompt"):
         raise HTTPException(status_code=400, detail="Item has no image_prompt. Generate content first.")
+        
     try:
-        import traceback
-        updated_item = generate_image_for_item(item)
-        for i, cal_item in enumerate(calendar_data["items"]):
-            if cal_item["id"] == req.item_id:
-                calendar_data["items"][i] = updated_item
-                break
-        save_calendar_data(calendar_data, req.month, req.year)
-        return {"success": True, "item": updated_item}
+        updated_dict = generate_image_for_item(map_item_to_dict(item))
+        
+        # Sadece image ile ilgili verileri DB'ye yaz
+        item.image_url = updated_dict.get("image_url")
+        item.image_generated_at = datetime.utcnow()
+        item.image_style_ref_used = updated_dict.get("image_style_ref_used", False)
+        item.image_element_used = updated_dict.get("image_element_used", False)
+        item.status = updated_dict.get("status", "image_generated")
+        
+        db.commit()
+        db.refresh(item)
+        return {"success": True, "item": map_item_to_dict(item)}
     except Exception as e:
+        db.rollback()
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
-
-
 
 
 @app.get("/api/item/image-history/{item_id}")
@@ -328,27 +379,20 @@ def get_image_history(item_id: int):
         ]
     }
 
-# ---------- Style Reference endpoints ----------
+# ---------- Style Reference & Element endpoints ----------
+# Bu alanlardaki veriler doğrudan işletim sistemi dosya yapısında saklandığı için değişmedi.
 
 @app.post("/api/item/upload-style")
-async def upload_style_reference(
-    item_id: int = Form(...),
-    file: UploadFile = File(...)
-):
-    """Upload a STYLE reference — Ideogram will match the visual style/mood."""
+async def upload_style_reference(item_id: int = Form(...), file: UploadFile = File(...)):
     allowed = {".jpg", ".jpeg", ".png", ".webp"}
     suffix = Path(file.filename).suffix.lower()
-    if suffix not in allowed:
-        raise HTTPException(status_code=400, detail=f"File type {suffix} not allowed.")
+    if suffix not in allowed: raise HTTPException(status_code=400, detail=f"File type {suffix} not allowed.")
     for ext in [".jpg", ".jpeg", ".png", ".webp"]:
         old_file = REFERENCES_DIR / f"item_{item_id}_style{ext}"
-        if old_file.exists():
-            old_file.unlink()
+        if old_file.exists(): old_file.unlink()
     save_path = REFERENCES_DIR / f"item_{item_id}_style{suffix}"
-    with open(save_path, "wb") as f:
-        shutil.copyfileobj(file.file, f)
+    with open(save_path, "wb") as f: shutil.copyfileobj(file.file, f)
     return {"success": True, "item_id": item_id, "style_url": f"/assets/references/{save_path.name}"}
-
 
 @app.delete("/api/item/delete-style/{item_id}")
 def delete_style_reference(item_id: int):
@@ -359,37 +403,24 @@ def delete_style_reference(item_id: int):
             return {"success": True}
     raise HTTPException(status_code=404, detail="No style reference found.")
 
-
 @app.get("/api/item/style/{item_id}")
 def get_style_reference(item_id: int):
     for ext in [".jpg", ".jpeg", ".png", ".webp"]:
         p = REFERENCES_DIR / f"item_{item_id}_style{ext}"
-        if p.exists():
-            return {"has_style": True, "style_url": f"/assets/references/{p.name}"}
+        if p.exists(): return {"has_style": True, "style_url": f"/assets/references/{p.name}"}
     return {"has_style": False, "style_url": None}
 
-
-# ---------- Design Element endpoints ----------
-
 @app.post("/api/item/upload-element")
-async def upload_element(
-    item_id: int = Form(...),
-    file: UploadFile = File(...)
-):
-    """Upload a DESIGN ELEMENT — this image will be used inside the composition (mockup, icon, etc)."""
+async def upload_element(item_id: int = Form(...), file: UploadFile = File(...)):
     allowed = {".jpg", ".jpeg", ".png", ".webp"}
     suffix = Path(file.filename).suffix.lower()
-    if suffix not in allowed:
-        raise HTTPException(status_code=400, detail=f"File type {suffix} not allowed.")
+    if suffix not in allowed: raise HTTPException(status_code=400, detail=f"File type {suffix} not allowed.")
     for ext in [".jpg", ".jpeg", ".png", ".webp"]:
         old_file = ELEMENTS_DIR / f"item_{item_id}_element{ext}"
-        if old_file.exists():
-            old_file.unlink()
+        if old_file.exists(): old_file.unlink()
     save_path = ELEMENTS_DIR / f"item_{item_id}_element{suffix}"
-    with open(save_path, "wb") as f:
-        shutil.copyfileobj(file.file, f)
+    with open(save_path, "wb") as f: shutil.copyfileobj(file.file, f)
     return {"success": True, "item_id": item_id, "element_url": f"/assets/elements/{save_path.name}"}
-
 
 @app.delete("/api/item/delete-element/{item_id}")
 def delete_element(item_id: int):
@@ -400,14 +431,13 @@ def delete_element(item_id: int):
             return {"success": True}
     raise HTTPException(status_code=404, detail="No design element found.")
 
-
 @app.get("/api/item/element/{item_id}")
 def get_element(item_id: int):
     for ext in [".jpg", ".jpeg", ".png", ".webp"]:
         p = ELEMENTS_DIR / f"item_{item_id}_element{ext}"
-        if p.exists():
-            return {"has_element": True, "element_url": f"/assets/elements/{p.name}"}
+        if p.exists(): return {"has_element": True, "element_url": f"/assets/elements/{p.name}"}
     return {"has_element": False, "element_url": None}
+
 
 @app.get("/{full_path:path}")
 async def serve_frontend(full_path: str):
