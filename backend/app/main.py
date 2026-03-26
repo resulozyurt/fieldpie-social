@@ -55,6 +55,10 @@ REFERENCES_DIR.mkdir(parents=True, exist_ok=True)
 ELEMENTS_DIR.mkdir(parents=True, exist_ok=True)
 
 app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
+# Frontend statik dosyalarını (JS/CSS) doğru MIME type ile sunmak için:
+UI_ASSETS_DIR = BASE_DIR / "frontend" / "dist" / "ui-assets"
+if UI_ASSETS_DIR.exists():
+    app.mount("/ui-assets", StaticFiles(directory=str(UI_ASSETS_DIR)), name="ui-assets")
 
 # ---------- helper ----------
 def map_item_to_dict(item: ContentItem) -> dict:
