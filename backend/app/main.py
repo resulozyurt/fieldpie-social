@@ -55,10 +55,7 @@ REFERENCES_DIR.mkdir(parents=True, exist_ok=True)
 ELEMENTS_DIR.mkdir(parents=True, exist_ok=True)
 
 app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
-# Frontend statik dosyalarını (JS/CSS) doğru MIME type ile sunmak için:
-UI_ASSETS_DIR = BASE_DIR / "frontend" / "dist" / "ui-assets"
-if UI_ASSETS_DIR.exists():
-    app.mount("/ui-assets", StaticFiles(directory=str(UI_ASSETS_DIR)), name="ui-assets")
+
 
 # ---------- helper ----------
 def map_item_to_dict(item: ContentItem) -> dict:
@@ -449,9 +446,14 @@ async def serve_frontend(full_path: str):
     build_dir = BASE_DIR / "frontend" / "dist"
     if not build_dir.exists():
         return {"error": "Frontend not built"}
+
     file_path = build_dir / full_path
+
+    # İstenen dosya (js, css) klasörde gerçekten varsa onu döndür
     if file_path.exists() and file_path.is_file():
         return FileResponse(str(file_path))
+
+    # Dosya yoksa index.html döndür (React Router mantığı)
     return FileResponse(str(build_dir / "index.html"))
 
 if __name__ == "__main__":
