@@ -464,8 +464,9 @@ def init_database(db: Session = Depends(get_db)):
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     
-    # 2. JSON'dan FieldPie verisini oku
-    brand_path = DATA_DIR / "brand_context.json"
+    # 2. JSON'dan FieldPie verisini oku (HATA BURADAYDI, DÜZELTİLDİ)
+    brand_path = BASE_DIR / "backend" / "app" / "data" / "brand_context.json"
+    
     if brand_path.exists():
         with open(brand_path, "r", encoding="utf-8") as f:
             data = json.load(f)
