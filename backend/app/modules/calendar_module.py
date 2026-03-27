@@ -20,9 +20,14 @@ def generate_content_calendar(month: int, year: int, brand_context: dict) -> dic
     target_audience = brand_context.get("brand", {}).get("target_audience", "Professionals")
     competitors = brand_context.get("social_media", {}).get("competitors", [])
     
-    # 1. Aşama: Rakiplerin Son 1 Aylık Ayak İzlerini Çek!
+    # 1. Aşama: Rakiplerin Son 1 Aylık Ayak İzlerini Çek! (GÜVENLİ HALE GETİRİLDİ)
     print(f"Rakip istihbaratı toplanıyor: {competitors} ...")
-    competitor_intel = get_competitor_intel(competitors) if competitors else "No competitor data available."
+    competitor_intel = "No competitor data available."
+    if competitors and len(competitors) > 0:
+        try:
+            competitor_intel = get_competitor_intel(competitors)
+        except Exception as e:
+            print(f"Scraping Hatası (Yakalandı): {e}")
 
     system_prompt = build_brand_system_prompt(brand_context)
 

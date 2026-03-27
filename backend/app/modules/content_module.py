@@ -44,7 +44,7 @@ def generate_content_for_item(calendar_item: dict, brand_context: dict) -> dict:
     - Language: The 'image_prompt' MUST ALWAYS be written in ENGLISH, regardless of the target audience language.
     - IF REALISTIC (contains humans): Ban plastic, doll-like AI appearances. Use terms like: "Shot on 35mm lens, cinematic lighting, real skin texture, candid photography, slight motion blur, natural imperfections". Subtly incorporate the {primary_color} color into small details (e.g., tie, coffee mug, background light).
     - IF DESIGN (graphic/infographic): Apply rules like: "Minimalist, flat design, high contrast, editorial layout, utilizing {primary_color} and negative space".
-    - TEXT ON IMAGE: Add a highly impactful text (max 6 words) summarizing the topic, enclosed in quotes ("") IN ENGLISH within the prompt.
+    - DO NOT include the headline or any specific text in the image_prompt. The text will be added later programmatically. Focus ONLY on the visual composition, lighting, style, and environment.
 
     The response MUST be ONLY the following JSON structure. No markdown formatting:
     {{
