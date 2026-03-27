@@ -16,3 +16,5 @@ export const editField = (month, year, item_id, field, value) => API.patch("/api
 export const getStats = (year, month) => API.get(`/api/stats/${year}/${month}`).then((r) => r.data);
 export const generateImage = (month, year, item_id) => API.post("/api/image/generate", { month, year, item_id }).then((r) => r.data);
 export const deleteCalendar = (year, month) => API.delete(`/api/calendar/${year}/${month}`).then((r) => r.data);
+export const getBrands = () => API.get("/api/brands").then((r) => r.data);
+export const createBrand = (brandData) => API.post("/api/brands", brandData).then((r) => r.data);
