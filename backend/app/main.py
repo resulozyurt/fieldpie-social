@@ -454,6 +454,34 @@ def get_element(item_id: int):
         if p.exists(): return {"has_element": True, "element_url": f"/assets/elements/{p.name}"}
     return {"has_element": False, "element_url": None}
 
+@app.post("/api/dev/init-db")
+def init_database(db: Session = Depends(get_db)):
+    """DİKKAT: Veritabanını sıfırlar ve JSON'daki FieldPie markasını SQL'e taşır."""
+    import json
+    from backend.app.models import Brand
+    
+    # 1. Eski tabloları sil ve yeni şemayla (Brands dahil) yeniden oluştur
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
+    
+    # 2. JSON'dan FieldPie verisini oku
+    brand_path = DATA_DIR / "brand_context.json"
+    if brand_path.exists():
+        with open(brand_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            
+        # 3. SQL 'Brands' tablosuna ilk markamızı (Ana Kiracı) kaydet
+        fieldpie = Brand(
+            name=data["brand"]["name"],
+            brand_details=data["brand"],
+            visual_identity=data["visual_identity"],
+            social_media=data["social_media"]
+        )
+        db.add(fieldpie)
+        db.commit()
+        return {"success": True, "message": "Tebrikler! Veritabanı Multi-Brand mimarisine geçirildi ve FieldPie sisteme tanımlandı."}
+    
+    return {"success": False, "message": "Hata: brand_context.json bulunamadı!"}
 
 @app.get("/{full_path:path}")
 async def serve_frontend(full_path: str):
