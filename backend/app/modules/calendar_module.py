@@ -1,4 +1,5 @@
 import json
+import re
 import anthropic
 from datetime import datetime
 from pathlib import Path
@@ -7,20 +8,15 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from backend.app.config import ANTHROPIC_API_KEY
-from backend.app.modules.brand_module import build_brand_system_prompt
 from backend.app.modules.intel_module import get_competitor_intel
 
 def generate_content_calendar(month: int, year: int, brand_context: dict) -> dict:
-    """
-    Generates a strategic content calendar using dynamic brand data, OSINT competitor intel, and English prompts.
-    """
     month_name = datetime(year, month, 1).strftime("%B %Y")
     
     brand_name = brand_context.get("brand", {}).get("name", "The Brand")
     target_audience = brand_context.get("brand", {}).get("target_audience", "Professionals")
     competitors = brand_context.get("social_media", {}).get("competitors", [])
     
-    # 1. Aşama: Rakiplerin Son 1 Aylık Ayak İzlerini Çek! (GÜVENLİ HALE GETİRİLDİ)
     print(f"Rakip istihbaratı toplanıyor: {competitors} ...")
     competitor_intel = "No competitor data available."
     if competitors and len(competitors) > 0:
@@ -29,9 +25,9 @@ def generate_content_calendar(month: int, year: int, brand_context: dict) -> dic
         except Exception as e:
             print(f"Scraping Hatası (Yakalandı): {e}")
 
-    system_prompt = build_brand_system_prompt(brand_context)
+    # Eski kırılgan brand_module iptal edildi, güvenli System Prompt:
+    system_prompt = f"You are a master Social Media Strategist for the brand '{brand_name}'."
 
-    # 2. Aşama: Claude'a İstihbaratı ve Görevi Ver
     user_prompt = f"""You are a top-tier Social Media Strategist. Create a 14-post content calendar for the month of {month_name} for the brand '{brand_name}'.
     
     Target Audience: {target_audience}
@@ -75,8 +71,11 @@ def generate_content_calendar(month: int, year: int, brand_context: dict) -> dic
     )
 
     response_text = message.content[0].text.strip()
-    if response_text.startswith("```"):
-        response_text = "\n".join(response_text.split("\n")[1:-1])
+    
+    # %100 Güvenli JSON Çıkarıcı (Claude araya laf karıştırsa bile JSON'u kurtarır)
+    json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+    if json_match:
+        response_text = json_match.group(0)
 
     calendar_data = json.loads(response_text)
     calendar_data["generated_at"] = datetime.now().isoformat()
