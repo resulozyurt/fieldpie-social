@@ -439,6 +439,14 @@ def get_element(item_id: int):
         if p.exists(): return {"has_element": True, "element_url": f"/assets/elements/{p.name}"}
     return {"has_element": False, "element_url": None}
 
+@app.delete("/api/calendar/{year}/{month}")
+def delete_calendar(year: int, month: int, db: Session = Depends(get_db)):
+    cal = db.query(Calendar).filter(Calendar.year == year, Calendar.month == month).first()
+    if not cal:
+        raise HTTPException(status_code=404, detail="Calendar not found")
+    db.delete(cal)
+    db.commit()
+    return {"success": True}
 
 @app.get("/{full_path:path}")
 async def serve_frontend(full_path: str):

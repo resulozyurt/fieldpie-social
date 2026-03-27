@@ -1,8 +1,16 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getCalendar, updateStatus, generateCalendar, regenerateItem, editField } from "../api";
+import { getCalendar, updateStatus, generateCalendar, regenerateItem, editField, deleteCalendar } from "../api";
 import "./CalendarPage.css";
 
+const STATUS_COLORS = {
+  pending: { bg: "#FFF8E1", text: "#B8860B", label: "Pending" },
+  content_generated: { bg: "#E3F2FD", text: "#1565C0", label: "Ready" },
+  approved: { bg: "#E8F5E9", text: "#2E7D32", label: "Approved" },
+  rejected: { bg: "#FFEBEE", text: "#C62828", label: "Rejected" },
+  published: { bg: "#F3E5F5", text: "#6A1B9A", label: "Published" },
+  error: { bg: "#FBE9E7", text: "#BF360C", label: "Error" },
+};
 const PLATFORM_ICONS = { LinkedIn: "💼", Instagram: "📷" };
 
 export default function CalendarPage() {
@@ -12,7 +20,7 @@ export default function CalendarPage() {
   const [calendar, setCalendar] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [progress, setProgress] = useState(null); // Aşama aşama üretim takibi için
+  const [progress, setProgress] = useState(null);
   const navigate = useNavigate();
 
   const fetchCalendar = () => {
@@ -28,74 +36,89 @@ export default function CalendarPage() {
     fetchCalendar();
   }, [year, month]);
 
-  // Sürükle-Bırak (Drag & Drop) İşlemleri
-  const handleDragStart = (e, itemId) => {
-    e.dataTransfer.setData("itemId", itemId);
-  };
+  const handleDragStart = (e, itemId) => { e.dataTransfer.setData("itemId", itemId); };
 
   const handleDrop = async (e, dateStr) => {
     e.preventDefault();
     const itemId = Number(e.dataTransfer.getData("itemId"));
     if (!itemId || !dateStr) return;
 
-    // Arayüzde anında güncelle (Optimistic UI)
     setCalendar(prev => ({
       ...prev,
       items: prev.items.map(i => i.id === itemId ? { ...i, date: dateStr } : i)
     }));
 
-    // Arka planda veritabanını güncelle
     try {
       await editField(month, year, itemId, "date", dateStr);
     } catch (err) {
-      console.error(err); // <-- ESLint kızmasın diye err değişkenini kullandık
+      console.error(err);
       alert("Tarih güncellenemedi!");
-      fetchCalendar(); // Hata olursa eski haline döndür
+      fetchCalendar();
     }
   };
 
-  // Aşama Aşama Takvim Üretim Motoru
+  // Akıllı Devam Etme (Resume) Fonksiyonu
+  const fillMissingContent = async (calData) => {
+    const pendingItems = calData.items.filter(i => i.status === 'pending' || i.status === 'error');
+    if(pendingItems.length === 0) return;
+
+    setProgress({ current: 0, total: pendingItems.length, text: "İçerikler üretiliyor..." });
+    
+    for (let i = 0; i < pendingItems.length; i++) {
+      const item = pendingItems[i];
+      setProgress({ 
+        current: i + 1, 
+        total: pendingItems.length, 
+        text: `Yazılıyor: ${item.topic.substring(0, 25)}...` 
+      });
+      
+      try {
+        const res = await regenerateItem(month, year, item.id);
+        setCalendar(prev => {
+          if(!prev) return prev;
+          const newItems = [...prev.items];
+          const idx = newItems.findIndex(x => x.id === item.id);
+          if(idx > -1) newItems[idx] = res.item;
+          return { ...prev, items: newItems };
+        });
+      } catch(err) {
+        console.error("Item gen failed", err);
+      }
+    }
+    setProgress(null);
+  };
+
   const handleGenerateCalendar = async () => {
     setError(null);
     setProgress({ current: 0, total: 14, text: "Takvim iskeleti ve strateji planlanıyor..." });
 
     try {
-      // 1. İskeleti Üret ve Kaydet
       await generateCalendar(month, year);
       const cal = await getCalendar(year, month);
       setCalendar(cal);
-
-      // 2. Her bir içerik için sırayla detayları üret
-      for (let i = 0; i < cal.items.length; i++) {
-        const item = cal.items[i];
-        if (item.status === 'pending' || item.status === 'error') {
-          setProgress({ 
-            current: i + 1, 
-            total: cal.items.length, 
-            text: `Yapay Zeka İçerik Yazıyor: ${item.topic.substring(0, 25)}...` 
-          });
-          
-          const res = await regenerateItem(month, year, item.id);
-          
-          // Arayüzde üretilen içeriğin statüsünü anında güncelle
-          setCalendar(prev => {
-            const newItems = [...prev.items];
-            const idx = newItems.findIndex(x => x.id === item.id);
-            if(idx > -1) newItems[idx] = res.item;
-            return { ...prev, items: newItems };
-          });
-        }
-      }
-      setProgress(null); // İşlem bitti
+      await fillMissingContent(cal);
     } catch (err) {
       setError("Üretim sırasında hata: " + (err.response?.data?.detail || err.message));
       setProgress(null);
     }
   };
 
-  const monthName = new Date(year, month - 1, 1).toLocaleString("en-US", { month: "long", year: "numeric" });
+  // Komple Takvimi Silip Yeniden Üreten Fonksiyon
+  const handleRebuildCalendar = async () => {
+    if(!window.confirm("DİKKAT: Bu ayki tüm takvim ve içerikler KALICI OLARAK silinip yepyeni bir strateji ile baştan üretilecek. Emin misiniz?")) return;
+    
+    setProgress({ current: 0, total: 1, text: "Eski takvim siliniyor..." });
+    try {
+      await deleteCalendar(year, month);
+      setCalendar(null);
+      await handleGenerateCalendar();
+    } catch(err) {
+      alert("Silme işlemi başarısız oldu.");
+      setProgress(null);
+    }
+  };
 
-  // Takvim Grid'ini Hesaplama (Pazartesi'den başlar)
+  const monthName = new Date(year, month - 1, 1).toLocaleString("en-US", { month: "long", year: "numeric" });
   const daysInMonth = new Date(year, month, 0).getDate();
   let firstDay = new Date(year, month - 1, 1).getDay() - 1;
   if (firstDay === -1) firstDay = 6;
@@ -113,6 +136,20 @@ export default function CalendarPage() {
         <div>
           <h1 className="page-title">Content Calendar</h1>
           <p className="page-sub">{calendar ? `${calendar.total_items} items · ${monthName}` : monthName}</p>
+          
+          {/* Akıllı Aksiyon Butonları (Yenileme & Eksik Üretim) */}
+          {calendar && !progress && (
+            <div style={{ display: 'flex', gap: '10px', marginTop: '12px' }}>
+              {calendar.items.some(i => i.status === 'pending' || i.status === 'error') && (
+                <button onClick={() => fillMissingContent(calendar)} className="btn-generate-main" style={{ padding: '6px 12px', fontSize: '12px', background: '#F3B800', color: '#000' }}>
+                  ⚡ Eksik İçerikleri Üret
+                </button>
+              )}
+              <button onClick={handleRebuildCalendar} className="btn-generate-main" style={{ padding: '6px 12px', fontSize: '12px', background: '#F51E2E' }}>
+                🔄 Sıfırdan Yenile
+              </button>
+            </div>
+          )}
         </div>
         <div className="month-nav">
           <button className="btn-nav" onClick={() => { const d = new Date(year, month - 2); setYear(d.getFullYear()); setMonth(d.getMonth() + 1); }}>‹</button>
@@ -123,7 +160,6 @@ export default function CalendarPage() {
 
       {loading && <div className="state-msg">Loading calendar...</div>}
 
-      {/* Progress Bar Ekranı */}
       {progress && (
         <div className="progress-overlay">
           <h3>🤖 Yapay Zeka İçerik Fabrikası Çalışıyor</h3>
@@ -131,25 +167,21 @@ export default function CalendarPage() {
           <div className="progress-bar-container">
             <div className="progress-bar-fill" style={{ width: `${(progress.current / progress.total) * 100}%` }}></div>
           </div>
-          <p style={{ fontSize: '12px', color: 'var(--gray-600)' }}>Lütfen bu sayfadan ayrılmayın ({progress.current}/{progress.total})</p>
+          <p style={{ fontSize: '12px', color: 'var(--gray-600)' }}>Lütfen bu sayfadan ayrılmayın veya sekmeyi kapatmayın ({progress.current}/{progress.total})</p>
         </div>
       )}
 
-      {/* Veri Yoksa Üret Butonu */}
       {!loading && !calendar && !progress && (
         <div className="state-msg">
-            <p style={{ marginBottom: '16px' }}>{error || "Bu ay için henüz bir içerik takvimi oluşturulmamış."}</p>
+            <p style={{ marginBottom: '16px' }}>Bu ay için henüz bir içerik takvimi oluşturulmamış.</p>
             <button onClick={handleGenerateCalendar} className="btn-generate-main">✦ Bu Ay İçin Takvim Üret</button>
         </div>
       )}
 
-      {/* Gerçek Takvim Grid Mimarisi */}
       {calendar && !progress && (
         <div className="calendar-grid">
           {['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'].map(d => <div className="cal-header-day" key={d}>{d}</div>)}
-          
           {blanks.map((_, i) => <div key={`blank-${i}`} className="cal-day blank"></div>)}
-          
           {days.map(d => (
             <div 
               key={d.dateStr} 
@@ -158,21 +190,24 @@ export default function CalendarPage() {
               onDrop={(e) => handleDrop(e, d.dateStr)}
             >
               <div className="day-number">{d.day}</div>
-              {d.items.map(item => (
-                <div
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, item.id)}
-                  className={`cal-item-card status-${item.status}`}
-                  key={item.id}
-                  onClick={() => navigate(`/item/${year}/${month}/${item.id}`)}
-                >
-                  <div className="cal-item-header">
-                    <span>{PLATFORM_ICONS[item.platform]}</span>
-                    <span className={`status-dot ${item.status}`}></span>
+              {d.items.map(item => {
+                const s = STATUS_COLORS[item.status] || STATUS_COLORS.pending;
+                return (
+                  <div
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, item.id)}
+                    className={`cal-item-card status-${item.status}`}
+                    key={item.id}
+                    onClick={() => navigate(`/item/${year}/${month}/${item.id}`)}
+                  >
+                    <div className="cal-item-header">
+                      <span>{PLATFORM_ICONS[item.platform]}</span>
+                      <span className={`status-dot ${item.status}`}></span>
+                    </div>
+                    <div className="cal-item-title">{item.topic}</div>
                   </div>
-                  <div className="cal-item-title">{item.topic}</div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           ))}
         </div>
