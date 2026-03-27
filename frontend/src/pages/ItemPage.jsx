@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { getCalendar, updateStatus, regenerateItem, editField, generateImage } from "../api";
 import "./ItemPage.css";
 
-const BASE = "http://localhost:8000";
+const BASE = import.meta.env.PROD ? "" : "http://localhost:8000";
 
 function useAssetSlot(endpoint, itemId) {
   const [url, setUrl] = useState(null);
@@ -320,7 +320,7 @@ export default function ItemPage() {
   src={`${BASE}${item.image_url}?t=${new Date(item.image_generated_at).getTime()}`} 
   alt={content.text_on_image} 
   className="generated-image" 
-  onError={(e) => { e.target.src = "https://via.placeholder.com/600x600?text=Görsel+Yükleniyor..."; }}
+  onError={(e) => { e.target.src = "https://placehold.co/600x600/E9ECEF/6C757D?text=Gorsel+Yukleniyor..."; }}
 />
               <div className="image-actions">
                 <a href={`${BASE}${item.image_url}`} download className="btn btn-secondary">↓ Download</a>
