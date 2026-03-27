@@ -47,10 +47,12 @@ ASSETS_DIR = BASE_DIR / "assets"
 GENERATED_DIR = ASSETS_DIR / "generated"
 REFERENCES_DIR = ASSETS_DIR / "references"
 ELEMENTS_DIR = ASSETS_DIR / "elements"
+LOGOS_DIR = ASSETS_DIR / "logos" # YENİ EKLENDİ
 
 GENERATED_DIR.mkdir(parents=True, exist_ok=True)
 REFERENCES_DIR.mkdir(parents=True, exist_ok=True)
 ELEMENTS_DIR.mkdir(parents=True, exist_ok=True)
+LOGOS_DIR.mkdir(parents=True, exist_ok=True) # YENİ EKLENDİ
 
 app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
 
@@ -86,6 +88,12 @@ def get_brand_context_from_db(brand: Brand):
     }
 
 # ---------- request models ----------
+
+class AssessBrandRequest(BaseModel):
+    brand_name: str
+    description: str
+    target_audience: str
+    competitors: list
 
 class BrandUpdateRequest(BaseModel):
     name: str
@@ -174,6 +182,37 @@ def duplicate_brand(brand_id: int, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_brand)
     return {"success": True, "brand_id": new_brand.id}
+
+@app.post("/api/upload-logo")
+async def upload_logo(file: UploadFile = File(...)):
+    """Arayüzden gelen logoyu assets/logos içine kaydeder."""
+    file_ext = file.filename.split(".")[-1]
+    safe_name = f"logo_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}.{file_ext}"
+    file_path = LOGOS_DIR / safe_name
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    return {"success": True, "url": f"/assets/logos/{safe_name}"}
+
+@app.post("/api/brands/assess")
+def assess_brand(req: AssessBrandRequest):
+    """Kullanıcının girdiği verilere bakarak AI'ın markayı nasıl anladığını test eder."""
+    import anthropic
+    from backend.app.config import ANTHROPIC_API_KEY
+    
+    prompt = f"""Based on the following inputs, write a 3-sentence summary proving you understand this brand. 
+    Tone should be professional. Tell me what they do, who they target, and how they differentiate from the given competitors.
+    Brand: {req.brand_name}
+    Description: {req.description}
+    Target Audience: {req.target_audience}
+    Competitors: {', '.join(req.competitors)}"""
+    
+    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    message = client.messages.create(
+        model="claude-3-5-sonnet-20241022",
+        max_tokens=300,
+        messages=[{"role": "user", "content": prompt}]
+    )
+    return {"assessment": message.content[0].text.strip()}
 
 @app.post("/api/brands")
 def create_brand(req: BrandCreateRequest, db: Session = Depends(get_db)):

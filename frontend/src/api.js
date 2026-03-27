@@ -30,3 +30,9 @@ export const editField = (month, year, item_id, field, value) => API.patch("/api
 export const getStats = (year, month) => API.get(`/api/stats/${year}/${month}?brand_id=${getBrandId()}`).then((r) => r.data);
 export const generateImage = (month, year, item_id) => API.post("/api/image/generate", { month, year, item_id }).then((r) => r.data);
 export const deleteCalendar = (year, month) => API.delete(`/api/calendar/${year}/${month}?brand_id=${getBrandId()}`).then((r) => r.data);
+export const uploadLogo = async (file) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  return API.post("/api/upload-logo", formData, { headers: { "Content-Type": "multipart/form-data" } }).then(r => r.data);
+};
+export const assessBrand = (data) => API.post("/api/brands/assess", data).then(r => r.data);
