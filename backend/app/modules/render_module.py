@@ -16,15 +16,22 @@ async def render_html_to_image(html_content: str, output_path: str):
         await page.screenshot(path=output_path, type="png")
         await browser.close()
 
-def generate_brand_html(image_url: str, text_on_image: str, brand_context: dict) -> str:
+def generate_brand_html(image_url: str, text_on_image: str, brand_context: dict, logo_b64: str = "") -> str:
     """
-    Apple/Nike tarzı: Görselin üzerinde koyu bir degrade (gradient overlay) ile
-    maksimum okunabilirlik sağlayan premium, şık ve modern tipografi şablonu.
+    Apple/Nike tarzı tipografi ve sol üstte Logo/Rozet konumu.
     """
-    brand_name = brand_context.get("brand_details", {}).get("name", "The Brand")
+    brand_name = brand_context.get("name", brand_context.get("brand_details", {}).get("name", ""))
     visuals = brand_context.get("visual_identity", {})
     primary_color = visuals.get("primary_color", "#005f56")
     font_family = visuals.get("typography", {}).get("primary", "sans-serif")
+
+    # Eğer logo varsa sol üste logoyu koy, yoksa küçük zarif bir marka rozeti koy
+    if logo_b64:
+        top_left_element = f"<img src='{logo_b64}' class='brand-logo' />"
+    elif brand_name:
+        top_left_element = f"<div class='brand-badge'>{brand_name}</div>"
+    else:
+        top_left_element = ""
 
     html = f"""
     <!DOCTYPE html>
@@ -45,10 +52,39 @@ def generate_brand_html(image_url: str, text_on_image: str, brand_context: dict)
                 position: relative;
                 display: flex;
                 flex-direction: column;
-                justify-content: flex-end; /* İçeriği en alta yaslar */
+                justify-content: flex-end;
             }}
             
-            /* Karanlık Degrade: Arka plandaki resim ne olursa olsun beyaz yazının %100 okunmasını sağlar */
+            /* Logo için Sol Üst Köşe Sabitlemesi */
+            .brand-logo {{
+                position: absolute;
+                top: 40px;
+                left: 40px;
+                max-height: 60px;
+                max-width: 250px;
+                object-fit: contain;
+                z-index: 10;
+                filter: drop-shadow(0 4px 6px rgba(0,0,0,0.4));
+            }}
+
+            /* Eğer logo yoksa çıkacak zarif rozet */
+            .brand-badge {{
+                position: absolute;
+                top: 40px;
+                left: 40px;
+                display: inline-block;
+                background-color: {primary_color};
+                color: #ffffff;
+                padding: 10px 20px;
+                border-radius: 8px;
+                font-size: 16px;
+                font-weight: 800;
+                letter-spacing: 2px;
+                text-transform: uppercase;
+                z-index: 10;
+                box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            }}
+            
             .overlay {{
                 position: absolute;
                 bottom: 0;
@@ -66,22 +102,6 @@ def generate_brand_html(image_url: str, text_on_image: str, brand_context: dict)
                 color: white;
             }}
 
-            /* Markanın Kurumsal Rengini Kullanan Modern Şık Rozet (Badge) */
-            .brand-badge {{
-                display: inline-block;
-                background-color: {primary_color};
-                color: #ffffff;
-                padding: 14px 28px;
-                border-radius: 100px;
-                font-size: 22px;
-                font-weight: 800;
-                letter-spacing: 2px;
-                text-transform: uppercase;
-                margin-bottom: 30px;
-                box-shadow: 0 10px 30px rgba(0,0,0,0.4);
-            }}
-
-            /* Scroll Durduran Devasa Başlık */
             .headline {{
                 font-size: 72px;
                 font-weight: 900;
@@ -93,9 +113,9 @@ def generate_brand_html(image_url: str, text_on_image: str, brand_context: dict)
         </style>
     </head>
     <body>
+        {top_left_element}
         <div class="overlay"></div>
         <div class="content-wrapper">
-            <div class="brand-badge">{brand_name}</div>
             <h1 class="headline">{text_on_image}</h1>
         </div>
     </body>

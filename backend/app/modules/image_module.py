@@ -24,7 +24,6 @@ GENERATED_DIR.mkdir(parents=True, exist_ok=True)
 REFERENCES_DIR.mkdir(parents=True, exist_ok=True)
 ELEMENTS_DIR.mkdir(parents=True, exist_ok=True)
 
-# Çift yazı çıkmasını engellemek için çok daha agresif filtre
 TEXT_INSTRUCTION_PATTERNS = [
     r'text\s+(overlay|reads?|says?|that\s+reads?)[^.]*\.',
     r'(bold\s+)?(white|black|teal|dark)?\s*text\s+["\'][^"\']*["\']',
@@ -53,10 +52,8 @@ def find_file(directory: Path, item_id: int, prefix: str) -> Path | None:
 def upload_to_fal(path: Path) -> str | None:
     try:
         url = fal_client.upload_file(str(path))
-        print(f"  ✓ Uploaded {path.name}")
         return url
-    except Exception as e:
-        print(f"  ⚠ Upload failed: {e}")
+    except Exception:
         return None
 
 def download_image(url: str, local_path: Path):
@@ -78,10 +75,23 @@ def generate_image_for_item(item: dict, brand_context: dict) -> dict:
     ideogram_style = content.get("ideogram_style", "DESIGN")
     item_id = item.get("id")
 
-    # Marka Kurumsal Renklerini Çekiyoruz
+    # Renk ve Arka plan bağlantıları
     visuals = brand_context.get("visual_identity", {})
     corporate_colors = visuals.get("corporate_colors", [])
+    background_colors = visuals.get("background_colors", [])
+    
     color_injection = f" Integrates corporate colors: {', '.join(corporate_colors)}." if corporate_colors else ""
+    bg_injection = f" Uses {', '.join(background_colors)} for background environment." if background_colors else ""
+
+    # Logo URL'sini bul ve Base64'e çevir (Eğer sisteme yüklendiyse)
+    logo_b64 = ""
+    logo_url = visuals.get("logo_url", "")
+    if logo_url and logo_url.startswith("/assets/"):
+        local_logo_path = BASE_DIR / logo_url.lstrip("/")
+        if local_logo_path.exists():
+            logo_b64 = image_to_base64(local_logo_path)
+    elif logo_url.startswith("http"):
+        logo_b64 = logo_url # Dışarıdan URL verilirse direkt kullan
 
     if not image_prompt:
         raise ValueError(f"Item {item_id} has no image_prompt")
@@ -89,11 +99,11 @@ def generate_image_for_item(item: dict, brand_context: dict) -> dict:
     base_prompt = clean_prompt(image_prompt)
 
     if ideogram_style == "REALISTIC":
-        style_suffix = "PHOTOREALISTIC photography. Real camera photo quality. Sharp focus. NOT illustration, NOT cartoon."
-        negative_prompt = "text, words, letters, numbers, typography, watermark, logo, illustration, cartoon, anime, drawing, painting, sketch, render, 3D, CGI, comic, digital art, flat design, vector, clip art, animated, stylized, blurry, low quality, distorted, ui, dashboard, labels"
+        style_suffix = "PHOTOREALISTIC photography. Sharp focus. USE SKELETON UI LINES FOR ANY SCREENS."
+        negative_prompt = "text, words, letters, numbers, typography, watermark, logo, illustration, cartoon, anime, drawing, painting, sketch, render, 3D, CGI, comic, digital art, flat design, vector, clip art, animated, stylized, blurry, low quality, distorted, ui, dashboard, actual labels"
     else:
-        style_suffix = "Clean graphic design composition. Pure visual composition only."
-        negative_prompt = "text, words, letters, numbers, typography, font, label, caption, watermark, logo, blurry, low quality, distorted, ui elements, labels"
+        style_suffix = "Clean graphic design composition. USE WIREFRAME BLOCKS AND SKELETON SHAPES INSTEAD OF UI TEXT."
+        negative_prompt = "text, words, letters, numbers, typography, font, label, caption, watermark, logo, blurry, low quality, distorted, actual ui elements, actual labels"
 
     element_path = find_file(ELEMENTS_DIR, item_id, "element")
     style_path = find_file(REFERENCES_DIR, item_id, "style")
@@ -101,16 +111,13 @@ def generate_image_for_item(item: dict, brand_context: dict) -> dict:
     element_url = upload_to_fal(element_path) if element_path else None
     style_url = upload_to_fal(style_path) if style_path else None
 
-    print(f"\n→ Item {item_id} | Style: {ideogram_style} | Element: {'✓' if element_url else '✗'} | Style ref: {'✓' if style_url else '✗'}")
-
     filename = f"item_{item_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
     local_path = GENERATED_DIR / filename
 
-    # Agresif "Yazı Yazma" uyarısı ve Marka Renkleri eklendi
-    final_prompt = f"{base_prompt}.{color_injection} {style_suffix} ABSOLUTELY NO TEXT, NO LETTERS, NO NUMBERS, NO UI LABELS IN THE IMAGE."
+    # Agresif Skeleton UI Emri
+    final_prompt = f"{base_prompt}.{color_injection}{bg_injection} {style_suffix} ABSOLUTELY NO ACTUAL TEXT OR LETTERS. USE WIREFRAME SKELETON LINES OR BLANK BLOCKS FOR ALL UI ELEMENTS."
     print(f"  Prompt: {final_prompt[:180]}...")
 
-    # Yaratıcılığı artırmak için magic_prompt_option "AUTO" yapıldı
     gen_arguments = {
         "prompt": final_prompt,
         "image_size": "square_hd",
@@ -120,33 +127,24 @@ def generate_image_for_item(item: dict, brand_context: dict) -> dict:
         "negative_prompt": negative_prompt,
     }
 
-    # Style ve Element Referanslarının İkisi de API'ye gönderiliyor (Sorun 5 Çözümü)
     image_refs = []
-    if style_url:
-        image_refs.append({"image_url": style_url})
-    if element_url:
-        image_refs.append({"image_url": element_url})
-
+    if style_url: image_refs.append({"image_url": style_url})
+    if element_url: image_refs.append({"image_url": element_url})
     if image_refs:
         gen_arguments["image_references"] = image_refs
-        # Fal API'si liste uzunluğuna göre kendi ayarlamasını yapar
         gen_arguments["image_reference_strength"] = 0.50 
 
     result = fal_client.run("fal-ai/ideogram/v3", arguments=gen_arguments)
 
     image_url_remote = result["images"][0]["url"]
-    print(f"  ✓ Ideogram generated — downloading...")
     download_image(image_url_remote, local_path)
 
     if text_on_image:
-        print(f"  Applying HTML/CSS render for text: '{text_on_image}'")
         bg_b64 = image_to_base64(local_path)
-        html_content = generate_brand_html(bg_b64, text_on_image, brand_context)
+        # HTML Motoruna Logo Verisini de Gönderiyoruz
+        html_content = generate_brand_html(bg_b64, text_on_image, brand_context, logo_b64)
         
         asyncio.run(render_html_to_image(html_content, str(local_path)))
-        print(f"  ✓ Dynamic Canvas rendered successfully")
-    else:
-        print(f"  No text_on_image — skipping overlay")
 
     item["image_url"] = f"/assets/generated/{filename}"
     item["image_local_path"] = str(local_path)
@@ -156,5 +154,4 @@ def generate_image_for_item(item: dict, brand_context: dict) -> dict:
     item["image_text_overlay"] = text_on_image or None
     item["status"] = "image_generated"
 
-    print(f"✓ Done: {filename}")
     return item
