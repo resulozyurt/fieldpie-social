@@ -87,6 +87,12 @@ def get_brand_context_from_db(brand: Brand):
 
 # ---------- request models ----------
 
+class BrandUpdateRequest(BaseModel):
+    name: str
+    brand_details: dict = {}
+    visual_identity: dict = {}
+    social_media: dict = {}
+
 class BrandCreateRequest(BaseModel):
     name: str
     brand_details: dict = {}
@@ -128,6 +134,46 @@ class GenerateImageRequest(BaseModel):
 def get_brands(db: Session = Depends(get_db)):
     brands = db.query(Brand).all()
     return [{"id": b.id, "name": b.name} for b in brands]
+
+@app.get("/api/brands/{brand_id}")
+def get_brand(brand_id: int, db: Session = Depends(get_db)):
+    brand = db.query(Brand).filter(Brand.id == brand_id).first()
+    if not brand: raise HTTPException(status_code=404, detail="Brand not found")
+    return {"id": brand.id, "name": brand.name, "brand_details": brand.brand_details, "visual_identity": brand.visual_identity, "social_media": brand.social_media}
+
+@app.put("/api/brands/{brand_id}")
+def update_brand(brand_id: int, req: BrandUpdateRequest, db: Session = Depends(get_db)):
+    brand = db.query(Brand).filter(Brand.id == brand_id).first()
+    if not brand: raise HTTPException(status_code=404, detail="Brand not found")
+    brand.name = req.name
+    brand.brand_details = req.brand_details
+    brand.visual_identity = req.visual_identity
+    brand.social_media = req.social_media
+    db.commit()
+    return {"success": True}
+
+@app.delete("/api/brands/{brand_id}")
+def delete_brand(brand_id: int, db: Session = Depends(get_db)):
+    brand = db.query(Brand).filter(Brand.id == brand_id).first()
+    if not brand: raise HTTPException(status_code=404, detail="Brand not found")
+    db.delete(brand)
+    db.commit()
+    return {"success": True}
+
+@app.post("/api/brands/{brand_id}/duplicate")
+def duplicate_brand(brand_id: int, db: Session = Depends(get_db)):
+    brand = db.query(Brand).filter(Brand.id == brand_id).first()
+    if not brand: raise HTTPException(status_code=404, detail="Brand not found")
+    new_brand = Brand(
+        name=f"{brand.name} (Copy)",
+        brand_details=brand.brand_details,
+        visual_identity=brand.visual_identity,
+        social_media=brand.social_media
+    )
+    db.add(new_brand)
+    db.commit()
+    db.refresh(new_brand)
+    return {"success": True, "brand_id": new_brand.id}
 
 @app.post("/api/brands")
 def create_brand(req: BrandCreateRequest, db: Session = Depends(get_db)):

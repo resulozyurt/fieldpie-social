@@ -4,6 +4,7 @@ import CalendarPage from "./pages/CalendarPage";
 import ItemPage from "./pages/ItemPage";
 import { getBrands, createBrand } from "./api";
 import "./App.css";
+import SettingsPage from "./pages/SettingsPage";
 
 export default function App() {
   const [brands, setBrands] = useState([]);
@@ -121,12 +122,18 @@ export default function App() {
           <NavLink to="/" end className={({ isActive }) => isActive ? "nav-item active" : "nav-item"}>
             📅 Calendar
           </NavLink>
+          {/* YENİ EKLENEN SETTINGS MENÜSÜ */}
+          <NavLink to="/settings" className={({ isActive }) => isActive ? "nav-item active" : "nav-item"}>
+            ⚙️ Settings
+          </NavLink>
         </nav>
 
         <main className="main-content">
           <Routes>
             <Route path="/" element={<CalendarPage />} />
             <Route path="/item/:year/:month/:id" element={<ItemPage />} />
+            {/* YENİ EKLENEN SETTINGS SAYFASI */}
+            <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </main>
 

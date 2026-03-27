@@ -13,6 +13,10 @@ const getBrandId = () => {
 };
 
 export const getBrands = () => API.get("/api/brands").then((r) => r.data);
+export const getBrand = (id) => API.get(`/api/brands/${id}`).then((r) => r.data);
+export const updateBrand = (id, data) => API.put(`/api/brands/${id}`, data).then((r) => r.data);
+export const deleteBrand = (id) => API.delete(`/api/brands/${id}`).then((r) => r.data);
+export const duplicateBrand = (id) => API.post(`/api/brands/${id}/duplicate`).then((r) => r.data);
 export const createBrand = (brandData) => API.post("/api/brands", brandData).then((r) => r.data);
 
 // Tüm isteklere ?brand_id= parametresini otomatik ekliyoruz
