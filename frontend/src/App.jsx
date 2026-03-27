@@ -12,7 +12,12 @@ export default function App() {
   });
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  
+  // Yeni Marka Form Değişkenleri
   const [newBrandName, setNewBrandName] = useState("");
+  const [newBrandPrimaryColor, setNewBrandPrimaryColor] = useState("#005f56");
+  const [newBrandTarget, setNewBrandTarget] = useState("");
+  const [newBrandCompetitors, setNewBrandCompetitors] = useState("");
 
   // Sayfa yüklendiğinde markaları veritabanından çek
   useEffect(() => {
@@ -38,13 +43,37 @@ export default function App() {
   // Yeni Marka Ekleme Aksiyonu
   const handleAddBrand = async () => {
     if (!newBrandName.trim()) return;
+    
+    // Virgülle ayrılmış rakipleri diziye (array) çevir
+    const compArray = newBrandCompetitors.split(",").map(c => c.trim()).filter(c => c);
+
+    const brandData = {
+      name: newBrandName,
+      brand_details: { 
+        name: newBrandName, 
+        target_audience: newBrandTarget || "Genel Kitle" 
+      },
+      visual_identity: { 
+        primary_color: newBrandPrimaryColor,
+        typography: { primary: "sans-serif" }
+      },
+      social_media: { 
+        competitors: compArray 
+      }
+    };
+
     try {
-      const res = await createBrand({ name: newBrandName });
+      const res = await createBrand(brandData);
       const newBrands = [...brands, { id: res.brand_id, name: res.name }];
       setBrands(newBrands);
       handleBrandSelect(res.brand_id); // Eklenen markayı hemen seç
       setIsModalOpen(false);
-      setNewBrandName("");
+      
+      // Formu temizle
+      setNewBrandName(""); 
+      setNewBrandPrimaryColor("#005f56"); 
+      setNewBrandTarget(""); 
+      setNewBrandCompetitors("");
     } catch (error) {
       alert("Marka eklenirken hata oluştu.");
     }
@@ -105,18 +134,35 @@ export default function App() {
         {isModalOpen && (
           <div className="modal-overlay">
             <div className="modal-content">
-              <h3>Yeni Marka Ekle</h3>
-              <p style={{fontSize: "13px", color: "gray", marginBottom: "16px"}}>Sisteme Evatro veya başka bir müşteri tanımlayın.</p>
-              <input 
-                type="text" 
-                placeholder="Marka Adı (Örn: Evatro)" 
-                value={newBrandName}
-                onChange={(e) => setNewBrandName(e.target.value)}
-                className="modal-input"
-              />
+              <h3>Yeni Marka Tanımla</h3>
+              <p style={{fontSize: "13px", color: "gray", marginBottom: "16px"}}>Markanın kurumsal kimliğini ve rakiplerini belirleyin.</p>
+              
+              <div style={{marginBottom: "12px"}}>
+                <label style={{display:"block", fontSize:"12px", fontWeight:"bold", marginBottom:"4px"}}>Marka Adı</label>
+                <input type="text" placeholder="Örn: Marka Adı" value={newBrandName} onChange={(e) => setNewBrandName(e.target.value)} className="modal-input" style={{marginBottom:0}}/>
+              </div>
+
+              <div style={{marginBottom: "12px"}}>
+                <label style={{display:"block", fontSize:"12px", fontWeight:"bold", marginBottom:"4px"}}>Kurumsal Renk (Hex)</label>
+                <div style={{display: "flex", gap: "10px"}}>
+                    <input type="color" value={newBrandPrimaryColor} onChange={(e) => setNewBrandPrimaryColor(e.target.value)} style={{height: "40px", cursor:"pointer"}}/>
+                    <input type="text" value={newBrandPrimaryColor} onChange={(e) => setNewBrandPrimaryColor(e.target.value)} className="modal-input" style={{marginBottom:0, flex:1}}/>
+                </div>
+              </div>
+
+              <div style={{marginBottom: "12px"}}>
+                <label style={{display:"block", fontSize:"12px", fontWeight:"bold", marginBottom:"4px"}}>Hedef Kitle</label>
+                <input type="text" placeholder="Örn: Türkiye'deki IK Yöneticileri" value={newBrandTarget} onChange={(e) => setNewBrandTarget(e.target.value)} className="modal-input" style={{marginBottom:0}}/>
+              </div>
+
+              <div style={{marginBottom: "20px"}}>
+                <label style={{display:"block", fontSize:"12px", fontWeight:"bold", marginBottom:"4px"}}>Rakipler (Virgülle ayırın)</label>
+                <input type="text" placeholder="Örn: KolayIK, Logo Yazılım" value={newBrandCompetitors} onChange={(e) => setNewBrandCompetitors(e.target.value)} className="modal-input" style={{marginBottom:0}}/>
+              </div>
+
               <div className="modal-actions">
                 <button onClick={() => setIsModalOpen(false)} className="btn-cancel">İptal</button>
-                <button onClick={handleAddBrand} className="btn-save">Ekle</button>
+                <button onClick={handleAddBrand} className="btn-save">Markayı Yarat</button>
               </div>
             </div>
           </div>
