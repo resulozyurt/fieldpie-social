@@ -13,8 +13,13 @@ from backend.app.modules.intel_module import get_competitor_intel
 def generate_content_calendar(month: int, year: int, brand_context: dict) -> dict:
     month_name = datetime(year, month, 1).strftime("%B %Y")
     
-    brand_name = brand_context.get("brand", {}).get("name", "The Brand")
-    target_audience = brand_context.get("brand", {}).get("target_audience", "Professionals")
+    # Settings'den gelen yeni dinamik verileri alıyoruz
+    brand_details = brand_context.get("brand_details", {})
+    brand_name = brand_details.get("name", brand_context.get("brand", {}).get("name", "The Brand"))
+    description = brand_details.get("description", "A generic brand.")
+    target_audience = brand_details.get("target_audience", "Professionals")
+    language = brand_details.get("language", "English")
+    
     competitors = brand_context.get("social_media", {}).get("competitors", [])
     
     print(f"Rakip istihbaratı toplanıyor: {competitors} ...")
@@ -25,12 +30,14 @@ def generate_content_calendar(month: int, year: int, brand_context: dict) -> dic
         except Exception as e:
             print(f"Scraping Hatası (Yakalandı): {e}")
 
-    # Eski kırılgan brand_module iptal edildi, güvenli System Prompt:
     system_prompt = f"You are a master Social Media Strategist for the brand '{brand_name}'."
 
     user_prompt = f"""You are a top-tier Social Media Strategist. Create a 14-post content calendar for the month of {month_name} for the brand '{brand_name}'.
     
-    Target Audience: {target_audience}
+    BRAND CONTEXT:
+    - What they do: {description}
+    - Target Audience: {target_audience}
+    - Output Language: {language}
     
     COMPETITOR INTELLIGENCE (Last 30 Days):
     {competitor_intel}
@@ -38,7 +45,7 @@ def generate_content_calendar(month: int, year: int, brand_context: dict) -> dic
     RULES:
     - Analyze the Competitor Intelligence provided above. What are they focusing on? Find their gaps and weaknesses.
     - Build a content strategy that OUTSMARTS them. Do not copy them; be more innovative.
-    - Language: Write the 'topic', 'hook', and 'notes' in the primary language of the target audience.
+    - Language: Write the 'topic', 'hook', and 'notes' STRICTLY in {language}.
     - Strategy: Avoid boring corporate jargon. Find scroll-stopping topics.
     - Distribution: Distribute the content evenly across LinkedIn and Instagram.
     - Content Pillars: Use pillars like Industry Insights, Success Stories, Product Intelligence, Team/Culture.
@@ -56,7 +63,7 @@ def generate_content_calendar(month: int, year: int, brand_context: dict) -> dic
           "format": "Carousel, Single Image, Infographic, Story",
           "topic": "Striking and specific topic title (max 8 words)",
           "hook": "Scroll-stopping first sentence to grab attention (max 12 words)",
-          "notes": "What is the psychological trigger of this post? How does it beat competitors?",
+          "notes": "What is the psychological trigger of this post?",
           "status": "pending"
         }}
       ]
@@ -72,7 +79,6 @@ def generate_content_calendar(month: int, year: int, brand_context: dict) -> dic
 
     response_text = message.content[0].text.strip()
     
-    # %100 Güvenli JSON Çıkarıcı (Claude araya laf karıştırsa bile JSON'u kurtarır)
     json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
     if json_match:
         response_text = json_match.group(0)

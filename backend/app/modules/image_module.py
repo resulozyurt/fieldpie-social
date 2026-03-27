@@ -24,6 +24,7 @@ GENERATED_DIR.mkdir(parents=True, exist_ok=True)
 REFERENCES_DIR.mkdir(parents=True, exist_ok=True)
 ELEMENTS_DIR.mkdir(parents=True, exist_ok=True)
 
+# Çift yazı çıkmasını engellemek için çok daha agresif filtre
 TEXT_INSTRUCTION_PATTERNS = [
     r'text\s+(overlay|reads?|says?|that\s+reads?)[^.]*\.',
     r'(bold\s+)?(white|black|teal|dark)?\s*text\s+["\'][^"\']*["\']',
@@ -33,6 +34,7 @@ TEXT_INSTRUCTION_PATTERNS = [
     r'rounded\s+rectangle[^.]*text[^.]*\.',
     r'reads?\s+["\'][^"\']*["\']',
     r'(caption|label|title|tagline)\s+["\'][^"\']*["\']',
+    r'(text|words|letters|typography|labels)\b.*?\.',
 ]
 
 def clean_prompt(prompt: str) -> str:
@@ -65,18 +67,21 @@ def download_image(url: str, local_path: Path):
             f.write(r.content)
 
 def image_to_base64(image_path: Path) -> str:
-    """Görseli HTML içine sorunsuz gömmek için Base64'e çevirir."""
     with open(image_path, "rb") as f:
         b64_data = base64.b64encode(f.read()).decode("utf-8")
         return f"data:image/png;base64,{b64_data}"
 
 def generate_image_for_item(item: dict, brand_context: dict) -> dict:
-    """Yapay zeka görseli çizer, HTML/CSS şablonu ile markaya özel metin basılır."""
     content = item.get("content", {})
     image_prompt = content.get("image_prompt", "")
     text_on_image = content.get("text_on_image", "").strip()
     ideogram_style = content.get("ideogram_style", "DESIGN")
     item_id = item.get("id")
+
+    # Marka Kurumsal Renklerini Çekiyoruz
+    visuals = brand_context.get("visual_identity", {})
+    corporate_colors = visuals.get("corporate_colors", [])
+    color_injection = f" Integrates corporate colors: {', '.join(corporate_colors)}." if corporate_colors else ""
 
     if not image_prompt:
         raise ValueError(f"Item {item_id} has no image_prompt")
@@ -84,11 +89,11 @@ def generate_image_for_item(item: dict, brand_context: dict) -> dict:
     base_prompt = clean_prompt(image_prompt)
 
     if ideogram_style == "REALISTIC":
-        style_suffix = "PHOTOREALISTIC photography. Real camera photo quality. Real human skin, natural lighting, sharp focus. NOT illustration, NOT cartoon. NO TEXT OR WORDS anywhere in the image."
-        negative_prompt = "text, words, letters, numbers, typography, watermark, logo, illustration, cartoon, anime, drawing, painting, sketch, render, 3D, CGI, comic, digital art, flat design, vector, clip art, animated, stylized, blurry, low quality, distorted, suit and tie, tuxedo, formal wear"
+        style_suffix = "PHOTOREALISTIC photography. Real camera photo quality. Sharp focus. NOT illustration, NOT cartoon."
+        negative_prompt = "text, words, letters, numbers, typography, watermark, logo, illustration, cartoon, anime, drawing, painting, sketch, render, 3D, CGI, comic, digital art, flat design, vector, clip art, animated, stylized, blurry, low quality, distorted, ui, dashboard, labels"
     else:
-        style_suffix = "Clean graphic design composition. NO TEXT, no words, no letters, no numbers anywhere in the image. Pure visual composition only."
-        negative_prompt = "text, words, letters, numbers, typography, font, label, caption, watermark, logo, blurry, low quality, distorted"
+        style_suffix = "Clean graphic design composition. Pure visual composition only."
+        negative_prompt = "text, words, letters, numbers, typography, font, label, caption, watermark, logo, blurry, low quality, distorted, ui elements, labels"
 
     element_path = find_file(ELEMENTS_DIR, item_id, "element")
     style_path = find_file(REFERENCES_DIR, item_id, "style")
@@ -101,21 +106,31 @@ def generate_image_for_item(item: dict, brand_context: dict) -> dict:
     filename = f"item_{item_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
     local_path = GENERATED_DIR / filename
 
-    final_prompt = f"{base_prompt}. {style_suffix}"
+    # Agresif "Yazı Yazma" uyarısı ve Marka Renkleri eklendi
+    final_prompt = f"{base_prompt}.{color_injection} {style_suffix} ABSOLUTELY NO TEXT, NO LETTERS, NO NUMBERS, NO UI LABELS IN THE IMAGE."
     print(f"  Prompt: {final_prompt[:180]}...")
 
+    # Yaratıcılığı artırmak için magic_prompt_option "AUTO" yapıldı
     gen_arguments = {
         "prompt": final_prompt,
         "image_size": "square_hd",
         "style": ideogram_style,
         "rendering_speed": "TURBO",
-        "magic_prompt_option": "OFF",
+        "magic_prompt_option": "AUTO",
         "negative_prompt": negative_prompt,
     }
 
+    # Style ve Element Referanslarının İkisi de API'ye gönderiliyor (Sorun 5 Çözümü)
+    image_refs = []
     if style_url:
-        gen_arguments["image_references"] = [{"image_url": style_url}]
-        gen_arguments["image_reference_strength"] = 0.50
+        image_refs.append({"image_url": style_url})
+    if element_url:
+        image_refs.append({"image_url": element_url})
+
+    if image_refs:
+        gen_arguments["image_references"] = image_refs
+        # Fal API'si liste uzunluğuna göre kendi ayarlamasını yapar
+        gen_arguments["image_reference_strength"] = 0.50 
 
     result = fal_client.run("fal-ai/ideogram/v3", arguments=gen_arguments)
 
@@ -123,14 +138,11 @@ def generate_image_for_item(item: dict, brand_context: dict) -> dict:
     print(f"  ✓ Ideogram generated — downloading...")
     download_image(image_url_remote, local_path)
 
-    # YENİ SİSTEM: HTML/CSS RENDER MOTORU
     if text_on_image:
         print(f"  Applying HTML/CSS render for text: '{text_on_image}'")
-        # Resmi Base64 yapıp HTML arka planına yerleştiriyoruz (kesin çalışması için)
         bg_b64 = image_to_base64(local_path)
         html_content = generate_brand_html(bg_b64, text_on_image, brand_context)
         
-        # Playwright'ı çalıştırıp şablonun fotoğrafını çekiyoruz ve resmi güncelliyoruz
         asyncio.run(render_html_to_image(html_content, str(local_path)))
         print(f"  ✓ Dynamic Canvas rendered successfully")
     else:
