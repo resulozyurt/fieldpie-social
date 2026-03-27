@@ -194,25 +194,34 @@ async def upload_logo(file: UploadFile = File(...)):
     return {"success": True, "url": f"/assets/logos/{safe_name}"}
 
 @app.post("/api/brands/assess")
-def assess_brand(req: AssessBrandRequest):
-    """Kullanıcının girdiği verilere bakarak AI'ın markayı nasıl anladığını test eder."""
+def assess_brand(req: dict):
+    """Kullanıcının girdiği verilere bakarak AI'ın markayı nasıl anladığını test eder (Esnek JSON Kabulü)."""
     import anthropic
     from backend.app.config import ANTHROPIC_API_KEY
     
+    # Gelen ham JSON verisini güvenli (esnek) bir şekilde alıyoruz
+    brand_name = req.get("brand_name", "Bilinmeyen Marka")
+    description = req.get("description", "Açıklama yok")
+    target_audience = req.get("target_audience", "Genel Kitle")
+    competitors_list = req.get("competitors", [])
+    
     prompt = f"""Based on the following inputs, write a 3-sentence summary proving you understand this brand. 
     Tone should be professional. Tell me what they do, who they target, and how they differentiate from the given competitors.
-    Brand: {req.brand_name}
-    Description: {req.description}
-    Target Audience: {req.target_audience}
-    Competitors: {', '.join(req.competitors)}"""
+    Brand: {brand_name}
+    Description: {description}
+    Target Audience: {target_audience}
+    Competitors: {', '.join(competitors_list)}"""
     
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-    message = client.messages.create(
-        model="claude-3-5-sonnet-20241022",
-        max_tokens=300,
-        messages=[{"role": "user", "content": prompt}]
-    )
-    return {"assessment": message.content[0].text.strip()}
+    try:
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        message = client.messages.create(
+            model="claude-3-5-sonnet-20241022",
+            max_tokens=300,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return {"assessment": message.content[0].text.strip()}
+    except Exception as e:
+        return {"assessment": f"AI Bağlantı Hatası: {str(e)}"}
 
 @app.post("/api/brands")
 def create_brand(req: BrandCreateRequest, db: Session = Depends(get_db)):
