@@ -8,10 +8,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from backend.app.config import ANTHROPIC_API_KEY
 from backend.app.modules.brand_module import build_brand_system_prompt
+from backend.app.modules.intel_module import get_competitor_intel
 
 def generate_content_calendar(month: int, year: int, brand_context: dict) -> dict:
     """
-    Generates a strategic content calendar using dynamic brand data and English prompts.
+    Generates a strategic content calendar using dynamic brand data, OSINT competitor intel, and English prompts.
     """
     month_name = datetime(year, month, 1).strftime("%B %Y")
     
@@ -19,18 +20,25 @@ def generate_content_calendar(month: int, year: int, brand_context: dict) -> dic
     target_audience = brand_context.get("brand", {}).get("target_audience", "Professionals")
     competitors = brand_context.get("social_media", {}).get("competitors", [])
     
-    comp_text = f"Pay special attention to the strategies and audiences of these competitors: {', '.join(competitors)}." if competitors else ""
+    # 1. Aşama: Rakiplerin Son 1 Aylık Ayak İzlerini Çek!
+    print(f"Rakip istihbaratı toplanıyor: {competitors} ...")
+    competitor_intel = get_competitor_intel(competitors) if competitors else "No competitor data available."
 
     system_prompt = build_brand_system_prompt(brand_context)
 
+    # 2. Aşama: Claude'a İstihbaratı ve Görevi Ver
     user_prompt = f"""You are a top-tier Social Media Strategist. Create a 14-post content calendar for the month of {month_name} for the brand '{brand_name}'.
     
     Target Audience: {target_audience}
-    {comp_text}
+    
+    COMPETITOR INTELLIGENCE (Last 30 Days):
+    {competitor_intel}
     
     RULES:
+    - Analyze the Competitor Intelligence provided above. What are they focusing on? Find their gaps and weaknesses.
+    - Build a content strategy that OUTSMARTS them. Do not copy them; be more innovative.
     - Language: Write the 'topic', 'hook', and 'notes' in the primary language of the target audience.
-    - Strategy: Avoid boring corporate jargon. Find innovative, scroll-stopping topics that lead the industry.
+    - Strategy: Avoid boring corporate jargon. Find scroll-stopping topics.
     - Distribution: Distribute the content evenly across LinkedIn and Instagram.
     - Content Pillars: Use pillars like Industry Insights, Success Stories, Product Intelligence, Team/Culture.
     
@@ -47,7 +55,7 @@ def generate_content_calendar(month: int, year: int, brand_context: dict) -> dic
           "format": "Carousel, Single Image, Infographic, Story",
           "topic": "Striking and specific topic title (max 8 words)",
           "hook": "Scroll-stopping first sentence to grab attention (max 12 words)",
-          "notes": "What is the psychological trigger of this post? Why will it get engagement?",
+          "notes": "What is the psychological trigger of this post? How does it beat competitors?",
           "status": "pending"
         }}
       ]
