@@ -111,8 +111,35 @@ class GenerateImageRequest(BaseModel):
     year: int
     item_id: int
 
+class BrandCreateRequest(BaseModel):
+    name: str
+    brand_details: dict = {}
+    visual_identity: dict = {}
+    social_media: dict = {}
 
 # ---------- routes ----------
+
+@app.get("/api/brands")
+def get_brands(db: Session = Depends(get_db)):
+    """Sistemdeki tüm markaları listeler."""
+    from backend.app.models import Brand
+    brands = db.query(Brand).all()
+    return [{"id": b.id, "name": b.name} for b in brands]
+
+@app.post("/api/brands")
+def create_brand(req: BrandCreateRequest, db: Session = Depends(get_db)):
+    """Sisteme yeni bir marka (Örn: Evatro) ekler."""
+    from backend.app.models import Brand
+    new_brand = Brand(
+        name=req.name,
+        brand_details=req.brand_details,
+        visual_identity=req.visual_identity,
+        social_media=req.social_media
+    )
+    db.add(new_brand)
+    db.commit()
+    db.refresh(new_brand)
+    return {"success": True, "brand_id": new_brand.id, "name": new_brand.name}
 
 @app.get("/")
 async def root():
