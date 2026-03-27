@@ -90,10 +90,10 @@ def get_brand_context_from_db(brand: Brand):
 # ---------- request models ----------
 
 class AssessBrandRequest(BaseModel):
-    brand_name: str
-    description: str
-    target_audience: str
-    competitors: list
+    brand_name: str = ""
+    description: str = ""
+    target_audience: str = ""
+    competitors: list = []
 
 class BrandUpdateRequest(BaseModel):
     name: str
