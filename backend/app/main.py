@@ -181,9 +181,11 @@ def generate_calendar(req: GenerateCalendarRequest, db: Session = Depends(get_db
     if existing:
         raise HTTPException(status_code=409, detail="Calendar already exists.")
     try:
-        # Not: calendar_module henüz db_context almadığı için bu aşamada varsayılan(FieldPie) iskeleti ile üretir
-        # Bir sonraki adımda AI modülünü Evatro'ya bağlayacağız!
-        calendar_data = generate_content_calendar(month=req.month, year=req.year)
+        # Marka verilerini veritabanından çekip takvim üretecine (AI) yolluyoruz!
+        brand = db.query(Brand).filter(Brand.id == req.brand_id).first()
+        brand_context = get_brand_context_from_db(brand)
+        
+        calendar_data = generate_content_calendar(month=req.month, year=req.year, brand_context=brand_context)
         
         new_cal = Calendar(
             brand_id=req.brand_id,
