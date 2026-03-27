@@ -313,16 +313,29 @@ def get_stats(year: int, month: int, brand_id: int, db: Session = Depends(get_db
 def generate_image(req: GenerateImageRequest, db: Session = Depends(get_db)):
     from backend.app.modules.image_module import generate_image_for_item
     item = db.query(ContentItem).filter(ContentItem.id == req.item_id).first()
+    
+    if not item:
+        raise HTTPException(status_code=404, detail=f"Item {req.item_id} not found")
+    if not item.content_data or not item.content_data.get("image_prompt"):
+        raise HTTPException(status_code=400, detail="Item has no image_prompt. Generate content first.")
+        
     try:
-        updated_dict = generate_image_for_item(map_item_to_dict(item))
+        # Seçili markanın renk, font vb. kimliğini al ve resim motoruna gönder
+        brand_context = get_brand_context_from_db(item.calendar.brand)
+        updated_dict = generate_image_for_item(map_item_to_dict(item), brand_context)
+        
         item.image_url = updated_dict.get("image_url")
         item.image_generated_at = datetime.utcnow()
+        item.image_style_ref_used = updated_dict.get("image_style_ref_used", False)
+        item.image_element_used = updated_dict.get("image_element_used", False)
         item.status = updated_dict.get("status", "image_generated")
+        
         db.commit()
         db.refresh(item)
         return {"success": True, "item": map_item_to_dict(item)}
     except Exception as e:
         db.rollback()
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/item/image-history/{item_id}")
