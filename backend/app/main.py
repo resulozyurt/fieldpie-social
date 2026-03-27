@@ -56,6 +56,10 @@ ELEMENTS_DIR.mkdir(parents=True, exist_ok=True)
 
 app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
 
+# Frontend statik dosyalarını (JS/CSS) doğru MIME type ile sunmak için (BEYAZ EKRAN ÇÖZÜMÜ):
+UI_ASSETS_DIR = BASE_DIR / "frontend" / "dist" / "ui-assets"
+if UI_ASSETS_DIR.exists():
+    app.mount("/ui-assets", StaticFiles(directory=str(UI_ASSETS_DIR)), name="ui-assets")
 
 # ---------- helper ----------
 def map_item_to_dict(item: ContentItem) -> dict:
@@ -159,6 +163,17 @@ def get_calendar(year: int, month: int, db: Session = Depends(get_db)):
         "total_items": len(cal.items),
         "items": [map_item_to_dict(item) for item in cal.items]
     }
+
+
+@app.delete("/api/calendar/{year}/{month}")
+def delete_calendar(year: int, month: int, db: Session = Depends(get_db)):
+    """Mevcut bir takvimi ve tüm içeriklerini veritabanından kalıcı olarak siler."""
+    cal = db.query(Calendar).filter(Calendar.year == year, Calendar.month == month).first()
+    if not cal:
+        raise HTTPException(status_code=404, detail="Calendar not found")
+    db.delete(cal)
+    db.commit()
+    return {"success": True}
 
 
 @app.post("/api/calendar/generate")
@@ -439,14 +454,6 @@ def get_element(item_id: int):
         if p.exists(): return {"has_element": True, "element_url": f"/assets/elements/{p.name}"}
     return {"has_element": False, "element_url": None}
 
-@app.delete("/api/calendar/{year}/{month}")
-def delete_calendar(year: int, month: int, db: Session = Depends(get_db)):
-    cal = db.query(Calendar).filter(Calendar.year == year, Calendar.month == month).first()
-    if not cal:
-        raise HTTPException(status_code=404, detail="Calendar not found")
-    db.delete(cal)
-    db.commit()
-    return {"success": True}
 
 @app.get("/{full_path:path}")
 async def serve_frontend(full_path: str):
