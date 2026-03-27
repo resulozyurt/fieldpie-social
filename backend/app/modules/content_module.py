@@ -10,7 +10,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 from backend.app.config import ANTHROPIC_API_KEY
 
 def generate_content_for_item(calendar_item: dict, brand_context: dict) -> dict:
-    # Tüm Settings verilerini çekiyoruz
     brand_details = brand_context.get("brand_details", {})
     brand_name = brand_details.get("name", "The Brand")
     description = brand_details.get("description", "A generic brand.")
@@ -60,7 +59,7 @@ def generate_content_for_item(calendar_item: dict, brand_context: dict) -> dict:
       "caption": "Perfectly written caption in {language}...",
       "image_prompt": "Ultra-detailed, creative, text-free English prompt for Ideogram V3...",
       "ideogram_style": "REALISTIC or DESIGN",
-      "text_on_image": "Short impactful text to appear on the image (in {language})",
+      "text_on_image": "A highly engaging, clickbaity, or curiosity-inducing 3-6 word HOOK (in {language}). MUST make the user stop scrolling! Examples: 'Stop doing this...', 'The ugly truth about...', '3 ways to scale...'",
       "description": "2-sentence alt text for accessibility and SEO (in {language})."
     }}"""
 
