@@ -71,15 +71,14 @@ def generate_image_for_item(item: dict, brand_context: dict) -> dict:
     image_prompt = content.get("image_prompt", "")
     text_on_image = content.get("text_on_image", "").strip()
     ideogram_style = content.get("ideogram_style", "DESIGN")
-    layout_type = content.get("layout_type", "overlay") # Claude'un seçtiği şablon
+    layout_type = content.get("layout_type", "split")
     item_id = item.get("id")
 
+    # Renk bağlantıları
     visuals = brand_context.get("visual_identity", {})
-    corporate_colors = visuals.get("corporate_colors", [])
-    background_colors = visuals.get("background_colors", [])
+    corporate_colors = visuals.get("corporate_colors", ["#005f56", "#2d3748"])
     
     color_injection = f" Integrates corporate colors: {', '.join(corporate_colors)}." if corporate_colors else ""
-    bg_injection = f" Uses {', '.join(background_colors)} for background environment." if background_colors else ""
 
     # Logo Base64
     logo_b64 = ""
@@ -91,7 +90,7 @@ def generate_image_for_item(item: dict, brand_context: dict) -> dict:
     elif logo_url.startswith("http"):
         logo_b64 = logo_url
 
-    # Brand Element (Pie şekli vb.) Base64 YENİ EKLENDİ
+    # Brand Element (Pie şekli vb.) Base64
     element_b64 = ""
     brand_element_url = visuals.get("brand_element_url", "")
     if brand_element_url and brand_element_url.startswith("/assets/"):
@@ -106,13 +105,14 @@ def generate_image_for_item(item: dict, brand_context: dict) -> dict:
 
     base_prompt = clean_prompt(image_prompt)
 
-    # DÜZELTME BURADA: Uzaylı telefonları ve şeffaf ekranları engelliyoruz
+    # DÜZELTME BURADA: Alakasız iskeletleri ve çocuk çizimlerini engelliyoruz.
+    # Ideogram'a, postun konusuyla uyumlu profesyonel saha servis ekranları çizdiriyoruz.
     if ideogram_style == "REALISTIC":
-        style_suffix = "PHOTOREALISTIC photography. Corporate and professional. If showing devices or tablets, the screens should show abstract blurred modern UI graphs. NO transparent glass phones."
-        negative_prompt = "text, words, letters, numbers, typography, watermark, logo, transparent glass phone, wireframe phone, sci-fi, blurry, low quality, distorted, actual UI text, labels"
+        style_suffix = "PHOTOREALISTIC photography. Corporate and professional enterprise setting. If showing devices, screens must show relevant professional enterprise dashboards (e.g., fleet tracking maps, analytical charts, dispatch schedules, technician calendars) rendered with high clarity. NO sci-fi. NO children. NO skeletons."
+        negative_prompt = "text, words, letters, numbers, typography, watermark, logo, skeleton, children, cartoon, drawing, sketch, scifi, blurry, low quality, distorted, actual UI text, labels"
     else:
-        style_suffix = "Clean modern corporate graphic design composition. Abstract vector elements."
-        negative_prompt = "text, words, letters, numbers, typography, font, label, caption, watermark, logo, transparent phone, wireframe phone, low quality"
+        style_suffix = "Clean modern corporate graphic design composition. Sleek enterprise data visualization with abstract vector elements."
+        negative_prompt = "text, words, letters, numbers, typography, font, label, caption, watermark, logo, skeleton, children, cartoon, drawing, blurry, low quality, actual labels"
 
     element_path = find_file(ELEMENTS_DIR, item_id, "element")
     style_path = find_file(REFERENCES_DIR, item_id, "style")
@@ -123,7 +123,7 @@ def generate_image_for_item(item: dict, brand_context: dict) -> dict:
     filename = f"item_{item_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
     local_path = GENERATED_DIR / filename
 
-    final_prompt = f"{base_prompt}.{color_injection}{bg_injection} {style_suffix} ABSOLUTELY NO ACTUAL TEXT OR LETTERS. USE WIREFRAME SKELETON LINES FOR UI ELEMENTS."
+    final_prompt = f"{base_prompt}.{color_injection} {style_suffix} ABSOLUTELY NO ACTUAL TEXT OR LETTERS. USE INTENTIONAL BLUR OR ABSTRACT GRAPHICS FOR ALL SCREEN CONTENT."
     print(f"  Prompt: {final_prompt[:180]}...")
 
     gen_arguments = {
