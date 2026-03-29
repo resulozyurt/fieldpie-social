@@ -36,3 +36,8 @@ export const uploadLogo = async (file) => {
   return API.post("/api/upload-logo", formData, { headers: { "Content-Type": "multipart/form-data" } }).then(r => r.data);
 };
 export const assessBrand = (data) => API.post("/api/brands/assess", data).then(r => r.data);
+export const uploadBrandAsset = async (file) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  return API.post("/api/upload-brand-asset", formData, { headers: { "Content-Type": "multipart/form-data" } }).then(r => r.data);
+};

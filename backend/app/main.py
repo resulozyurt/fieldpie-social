@@ -193,6 +193,22 @@ async def upload_logo(file: UploadFile = File(...)):
         shutil.copyfileobj(file.file, buffer)
     return {"success": True, "url": f"/assets/logos/{safe_name}"}
 
+# Marka Öğeleri için Klasör (Dosyanın üst kısımlarındaki LOGOS_DIR tanımının yanına eklenmiş varsayıyoruz)
+BRAND_ASSETS_DIR = BASE_DIR / "assets" / "brand_assets"
+BRAND_ASSETS_DIR.mkdir(parents=True, exist_ok=True)
+
+@app.post("/api/upload-brand-asset")
+async def upload_brand_asset(file: UploadFile = File(...)):
+    """Arayüzden gelen marka öğelerini (pie şekli, filigran vb.) kaydeder."""
+    import shutil
+    from datetime import datetime
+    file_ext = file.filename.split(".")[-1]
+    safe_name = f"asset_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}.{file_ext}"
+    file_path = BRAND_ASSETS_DIR / safe_name
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    return {"success": True, "url": f"/assets/brand_assets/{safe_name}"}
+
 @app.post("/api/brands/assess")
 def assess_brand(req: dict):
     """Kullanıcının girdiği verilere bakarak AI'ın markayı nasıl anladığını test eder (Esnek JSON Kabulü)."""
