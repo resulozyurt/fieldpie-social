@@ -106,12 +106,13 @@ def generate_image_for_item(item: dict, brand_context: dict) -> dict:
 
     base_prompt = clean_prompt(image_prompt)
 
+    # DÜZELTME BURADA: Uzaylı telefonları ve şeffaf ekranları engelliyoruz
     if ideogram_style == "REALISTIC":
-        style_suffix = "PHOTOREALISTIC photography. Sharp focus. USE SKELETON UI LINES FOR ANY SCREENS."
-        negative_prompt = "text, words, letters, numbers, typography, watermark, logo, illustration, cartoon, anime, drawing, painting, sketch, render, 3D, CGI, comic, digital art, flat design, vector, clip art, animated, stylized, blurry, low quality, distorted, ui, dashboard, actual labels"
+        style_suffix = "PHOTOREALISTIC photography. Corporate and professional. If showing devices or tablets, the screens should show abstract blurred modern UI graphs. NO transparent glass phones."
+        negative_prompt = "text, words, letters, numbers, typography, watermark, logo, transparent glass phone, wireframe phone, sci-fi, blurry, low quality, distorted, actual UI text, labels"
     else:
-        style_suffix = "Clean graphic design composition. USE WIREFRAME BLOCKS AND SKELETON SHAPES INSTEAD OF UI TEXT."
-        negative_prompt = "text, words, letters, numbers, typography, font, label, caption, watermark, logo, blurry, low quality, distorted, actual ui elements, actual labels"
+        style_suffix = "Clean modern corporate graphic design composition. Abstract vector elements."
+        negative_prompt = "text, words, letters, numbers, typography, font, label, caption, watermark, logo, transparent phone, wireframe phone, low quality"
 
     element_path = find_file(ELEMENTS_DIR, item_id, "element")
     style_path = find_file(REFERENCES_DIR, item_id, "style")
