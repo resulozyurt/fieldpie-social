@@ -39,26 +39,27 @@ def generate_content_for_item(calendar_item: dict, brand_context: dict) -> dict:
     What they do: {description}
     Target Audience: {target_audience}
     Corporate Colors: {color_str}
-    Background Colors: {bg_color_str}
     Output Language: {language}
 
     COPYWRITING RULES:
     - Language: MUST be written exactly in {language}.
     - Avoid corporate jargon. Write as if you are conversing with real humans.
-    - Use PAS (Problem-Agitate-Solution) or AIDA frameworks.
 
-    ART DIRECTION RULES (Image Prompt for Ideogram V3):
+    ART DIRECTION & LAYOUT RULES:
     - Language: The 'image_prompt' MUST ALWAYS be written in ENGLISH.
-    - SKELETON UI (CRITICAL): If your image features a dashboard, screen, app, or document, you MUST explicitly instruct the AI to use "abstract wireframe blocks, skeleton UI lines, or blank blurred shapes instead of text". BAN all actual letters and words.
-    - CREATIVITY: Do not just describe flat dashboards. Use conceptual metaphors, dynamic 3D layouts, cinematic angles, or surreal minimalist compositions.
-    - COLORS: Subtly weave the corporate colors ({color_str}) into highlights. Strongly use background colors ({bg_color_str}) for the walls, environments, or gradient backdrops.
+    - SKELETON UI: If your image features a dashboard or app, instruct the AI to use "abstract wireframe blocks, skeleton UI lines instead of text". BAN all actual letters.
+    - LAYOUT SELECTION: You must choose the best visual layout for this post from these 3 options:
+      1. 'overlay': Full cinematic image with a dark gradient at the bottom and text over it. Best for photography or strong emotional visuals.
+      2. 'split': Top half is image, bottom half is a solid brand-colored block with text. Best for UI mockups, clear features, or data-driven posts.
+      3. 'card': Blurred background image with a centered frosted-glass card containing the text. Best for quotes, statistics, or minimalist typography.
 
     The response MUST be ONLY the following JSON structure. No markdown formatting:
     {{
       "caption": "Perfectly written caption in {language}...",
       "image_prompt": "Ultra-detailed, creative, text-free English prompt for Ideogram V3 enforcing skeleton UI...",
       "ideogram_style": "REALISTIC or DESIGN",
-      "text_on_image": "A highly engaging, clickbaity 3-6 word HOOK (in {language}). Examples: 'Stop doing this...', 'The ugly truth about...'",
+      "layout_type": "overlay OR split OR card",
+      "text_on_image": "A highly engaging, clickbaity 3-6 word HOOK (in {language}). Examples: 'Stop doing this...'",
       "description": "2-sentence alt text for accessibility (in {language})."
     }}"""
 
@@ -71,7 +72,6 @@ def generate_content_for_item(calendar_item: dict, brand_context: dict) -> dict:
     )
 
     response_text = message.content[0].text.strip()
-    
     json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
     if json_match:
         response_text = json_match.group(0)
